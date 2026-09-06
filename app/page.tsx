@@ -22,7 +22,9 @@ import {
   chooseNextIntent,
   createSewerEncounter,
   createSewerEncounterByIndex,
-  getEncounterIndicesForRegion,
+  getEnemyCodexEntries,
+  getEncounterRegionNumber,
+  getEncounterSpawnPool,
   getSewerEncounterLabel,
   reduceEnemyDamageByResistance,
   SEWER_ENCOUNTER_COUNT,
@@ -49,7 +51,7 @@ import {
   type MapBomb,
 } from "./game/mapEffects";
 import { cardsForNextShuffle, dealCardsToFixedPiles } from "./game/cardRules";
-import { addResistance, addVulnerability, vulnerabilityMultiplier } from "./game/statuses";
+import { addResistance, addVulnerability, decayThenAddVulnerability, vulnerabilityMultiplier } from "./game/statuses";
 
 type CardKind = "strike" | "defend" | "skill";
 type DamageType = "physical" | "magic";
@@ -112,7 +114,7 @@ type CardEffect =
   | "cassiopeia";
 
 const HAND_PASSIVE_EFFECTS = new Set<CardEffect>(["combatManual", "grimoire"]);
-type Phase = "drawing" | "playing" | "discarding" | "enemy-turn";
+type Phase = "drawing" | "playing" | "discarding" | "enemy-turn" | "resolving";
 type Screen = "map" | "battle";
 type MapPosition = { x: number; y: number };
 type RoomType =
@@ -258,7 +260,7 @@ type GameState = {
   energy: number;
   stars: number;
   pendingDraws: number;
-  /** A one-time chosen-file draw (used by 뽑아내기). */
+  /** A one-time chosen-file draw. */
   pendingPileDrawCount: number;
   pendingDiscards: number;
   pendingSweep: boolean;
@@ -374,7 +376,7 @@ function animateEnemyTokenDelivery(target: HTMLElement, source: DOMRect, delay =
   return animation;
 }
 
-function animateCardToPlayer(sourceCard: HTMLElement, source: DOMRect, target: HTMLElement, delay = 0) {
+function animateCardToPlayer(sourceCard: HTMLElement, source: DOMRect, target: HTMLElement, delay = 0, duration = 820) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
   const sourceStyle = window.getComputedStyle(sourceCard);
   const cardWidth = Number.parseFloat(sourceStyle.width) || source.width;
@@ -402,20 +404,61 @@ function animateCardToPlayer(sourceCard: HTMLElement, source: DOMRect, target: H
   host.appendChild(ghost);
   const deltaX = targetLeft - sourceLeft;
   const deltaY = targetTop - sourceTop;
-  const arcHeight = Math.min(130, Math.max(65, Math.abs(deltaY) * .18));
   const animation = ghost.animate(
     [
       { transform: "translate(0, 0) rotate(-10deg)", opacity: .92 },
-      { offset: .18, transform: "translate(0, 0) rotate(-10deg)", opacity: .92 },
-      { offset: .64, transform: `translate(${deltaX * .58}px, ${deltaY * .58 - arcHeight}px) rotate(7deg)`, opacity: 1 },
       { transform: `translate(${deltaX}px, ${deltaY}px) rotate(0deg)`, opacity: 1 },
     ],
-    { duration: 820, delay, easing: "cubic-bezier(.18,.72,.2,1)", fill: "backwards" },
+    { duration, delay, easing: "cubic-bezier(.18,.72,.2,1)", fill: "backwards" },
   );
   const cleanup = () => ghost.remove();
   animation.addEventListener("finish", cleanup, { once: true });
   animation.addEventListener("cancel", cleanup, { once: true });
   return animation;
+}
+
+function animatePlayedCardToCenter(sourceCard: HTMLElement) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0;
+  const source = sourceCard.getBoundingClientRect();
+  const sourceStyle = window.getComputedStyle(sourceCard);
+  const cardWidth = Number.parseFloat(sourceStyle.width) || source.width;
+  const cardHeight = Number.parseFloat(sourceStyle.height) || source.height;
+  const sourceLeft = source.left + (source.width - cardWidth) / 2;
+  const sourceTop = source.top + (source.height - cardHeight) / 2;
+  const host = sourceCard.closest<HTMLElement>(".battlefield") ?? document.body;
+  const hostRect = host.getBoundingClientRect();
+  const targetLeft = hostRect.left + (hostRect.width - cardWidth) / 2;
+  const targetTop = hostRect.top + (hostRect.height - cardHeight) / 2;
+  const ghost = sourceCard.cloneNode(true) as HTMLElement;
+  const previousOpacity = sourceCard.style.opacity;
+  ghost.classList.add("played-card-flight");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    zIndex: "110",
+    top: `${sourceTop}px`,
+    left: `${sourceLeft}px`,
+    width: `${cardWidth}px`,
+    height: `${cardHeight}px`,
+    margin: "0",
+    pointerEvents: "none",
+  });
+  ghost.setAttribute("aria-hidden", "true");
+  host.appendChild(ghost);
+  sourceCard.style.opacity = "0";
+  const animation = ghost.animate(
+    [
+      { transform: "translate(0, 0) rotate(0deg) scale(1)", opacity: 1 },
+      { transform: `translate(${targetLeft - sourceLeft}px, ${targetTop - sourceTop}px) rotate(-4deg) scale(.78)`, opacity: 0 },
+    ],
+    { duration: 170, easing: "cubic-bezier(.24,.78,.3,1)", fill: "forwards" },
+  );
+  const cleanup = () => {
+    ghost.remove();
+    sourceCard.style.opacity = previousOpacity;
+  };
+  animation.addEventListener("finish", cleanup, { once: true });
+  animation.addEventListener("cancel", cleanup, { once: true });
+  return 170;
 }
 
 type BattleThemeColors = {
@@ -782,7 +825,7 @@ const STARTING_DECK_SIZE = 16;
 const INVENTORY_CAPACITY = 12;
 const MAX_OWNED_DECKS = 3;
 const BLESSING_INFO: Record<BlessingId, { name: string; description: string }> = {
-  vision: { name: "시야 확장", description: "시야가 5×5가 됩니다." },
+  vision: { name: "시야 확장", description: "적 시야가 7×7로 늘어납니다." },
   lightStep: { name: "가벼운 걸음", description: "적의 인식 확률이 절반이 됩니다." },
   sturdy: { name: "튼튼함", description: "최대 체력이 20 증가합니다." },
   greed: { name: "탐욕스러움", description: "골드 획득량이 2배가 됩니다." },
@@ -795,15 +838,6 @@ const BLESSING_INFO: Record<BlessingId, { name: string; description: string }> =
 const STARTER_DECK_CAPACITY = 20;
 const DEBUG_ALL_CARDS_DECK_ID = "debug-all-cards";
 const REGION_COUNT = 7;
-const REGION_NAMES = [
-  "하수구",
-  "이름 미정 지역",
-  "이름 미정 지역",
-  "이름 미정 지역",
-  "이름 미정 지역",
-  "이름 미정 지역",
-  "이름 미정 지역",
-] as const;
 const ROCK_BARRIER_HEIGHT = 5;
 const SHOP_NODE_CHANCE = 0.0025;
 const SHRINE_NODE_CHANCE = 0.0025;
@@ -812,12 +846,13 @@ const PORTAL_NODE_CHANCE = 0.05;
 const ROCK_CLUSTER_CHANCE = 0.03;
 const ROCK_CLUSTER_EDGE_CHANCE = 0.05;
 const FLOOR_CARD_DROP_CHANCE = 0.01;
-const DUNGEON_MIN_X = -80;
-const DUNGEON_MAX_X = 80;
-const SAFE_AREA_START_X = 60;
+const DUNGEON_MIN_X = -160;
+const DUNGEON_MAX_X = 160;
+const SAFE_AREA_START_X = DUNGEON_MAX_X - 20;
 const SAFE_AREA_ENTRY_X = SAFE_AREA_START_X + 1;
 const SAFE_AREA_HEAL_X = SAFE_AREA_START_X + 2;
 const SAFE_AREA_PORTAL_X = SAFE_AREA_START_X + 3;
+const SAFE_AREA_REVEAL_RADIUS = 2;
 const MAP_COLUMNS = DUNGEON_MAX_X - DUNGEON_MIN_X + 1;
 const REGION_HEIGHT = 15;
 const MAP_ROWS = REGION_COUNT * REGION_HEIGHT + (REGION_COUNT - 1) * ROCK_BARRIER_HEIGHT;
@@ -1089,6 +1124,28 @@ function isSafeAreaPosition(position: MapPosition) {
   return getSafeAreaRegionIndex(position) !== null;
 }
 
+function getSafeAreaLayoutRegionIndex(position: MapPosition) {
+  for (let regionIndex = 0; regionIndex < REGION_COUNT; regionIndex += 1) {
+    if (
+      Math.abs(position.x - SAFE_AREA_HEAL_X) <= 2
+      && Math.abs(position.y - safeAreaCenterY(regionIndex)) <= 2
+    ) return regionIndex;
+  }
+  return null;
+}
+
+function distanceToSafeArea(position: MapPosition, regionIndex: number) {
+  const centerY = safeAreaCenterY(regionIndex);
+  const interior = [
+    { x: SAFE_AREA_HEAL_X, y: centerY - 1 },
+    { x: SAFE_AREA_ENTRY_X, y: centerY },
+    { x: SAFE_AREA_HEAL_X, y: centerY },
+    { x: SAFE_AREA_PORTAL_X, y: centerY },
+    { x: SAFE_AREA_HEAL_X, y: centerY + 1 },
+  ];
+  return Math.min(...interior.map((cell) => chebyshevDistance(position, cell)));
+}
+
 function safeAreaEntry(regionIndex: number): MapPosition {
   return { x: SAFE_AREA_ENTRY_X, y: safeAreaCenterY(regionIndex) };
 }
@@ -1169,19 +1226,13 @@ function getRoomType(position: MapPosition, seed: number): RoomType {
     if (position.x === SAFE_AREA_HEAL_X) return "heal";
     return "safePortal";
   }
-  for (let regionIndex = 0; regionIndex < REGION_COUNT; regionIndex += 1) {
-    const centerY = safeAreaCenterY(regionIndex);
-    const originalSafeWall =
-      position.x >= SAFE_AREA_START_X - 1
-      && position.x <= SAFE_AREA_PORTAL_X + 2
-      && position.y >= centerY - 1
-      && position.y <= centerY + 1;
-    const addedTopBottomWall =
-      position.x >= SAFE_AREA_ENTRY_X - 1
-      && position.x <= SAFE_AREA_PORTAL_X + 1
-      && Math.abs(position.y - centerY) === 2;
-    const inSafeWall = originalSafeWall || addedTopBottomWall;
-    if (inSafeWall) return "rock";
+  const safeLayoutRegion = getSafeAreaLayoutRegionIndex(position);
+  if (safeLayoutRegion !== null) {
+    const offsetX = position.x - SAFE_AREA_HEAL_X;
+    const offsetY = position.y - safeAreaCenterY(safeLayoutRegion);
+    const isOuterCorner = Math.abs(offsetX) === 2 && Math.abs(offsetY) === 2;
+    if (isOuterCorner) return "empty";
+    return "rock";
   }
   if (
     position.x >= DUNGEON_MIN_X
@@ -1226,21 +1277,42 @@ function visibleMapRoomKeys(
   horizontalRadius = MAP_PLAYER_VISION_HORIZONTAL_RADIUS,
   verticalRadius = MAP_PLAYER_VISION_VERTICAL_RADIUS,
 ) {
-  const keys = new Set<string>();
+  const candidates = new Map<string, { position: MapPosition; type: RoomType }>();
   for (let offsetY = -verticalRadius; offsetY <= verticalRadius; offsetY += 1) {
     for (let offsetX = -horizontalRadius; offsetX <= horizontalRadius; offsetX += 1) {
       const position = { x: center.x + offsetX, y: center.y + offsetY };
-      if (getRoomType(position, seed) !== "void") keys.add(mapRoomKey(position));
+      const type = getRoomType(position, seed);
+      if (type !== "void") candidates.set(mapRoomKey(position), { position, type });
     }
   }
-  return keys;
+  const centerKey = mapRoomKey(center);
+  const centerCell = candidates.get(centerKey);
+  if (!centerCell) return new Set<string>();
+
+  const visible = new Set<string>([centerKey]);
+  const traversed = new Set<string>([centerKey]);
+  const queue = [centerCell.position];
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    for (const direction of EIGHT_DIRECTIONS) {
+      const next = { x: current.x + direction.x, y: current.y + direction.y };
+      const nextKey = mapRoomKey(next);
+      const nextCell = candidates.get(nextKey);
+      if (!nextCell) continue;
+      visible.add(nextKey);
+      if (!isWalkableRoom(nextCell.type) || traversed.has(nextKey)) continue;
+      traversed.add(nextKey);
+      queue.push(nextCell.position);
+    }
+  }
+  return visible;
 }
 
 function isMapEnemySpawnCell(position: MapPosition, seed: number) {
   const regionIndex = getDungeonRegionIndex(position);
   return chebyshevDistance(position, MAP_START) > 1
     && regionIndex !== null
-    && regionIndex < 2
+    && getEncounterSpawnPool(regionIndex, 1).length > 0
     && !isSafeAreaPosition(position)
     && getRoomType(position, seed) === "empty";
 }
@@ -1256,7 +1328,8 @@ function createPreGeneratedMapEnemyWorld(seed: number) {
   const world = createMapEnemyWorld(spawnCells, seed, SEWER_ENCOUNTER_COUNT);
   return {
     enemies: world.enemies.map((enemy) => {
-      const candidates = getEncounterIndicesForRegion(getDungeonRegionIndex(enemy.position) ?? -1);
+      const regionIndex = getDungeonRegionIndex(enemy.position) ?? -1;
+      const candidates = getEncounterSpawnPool(regionIndex, seededRoll(enemy.position, seed, 4000));
       const roll = seededRoll(enemy.position, seed, 4001);
       return {
         ...enemy,
@@ -1338,13 +1411,6 @@ const DEFENSE_LABEL: Record<DamageType, string> = {
   magic: "마법 방어",
 };
 
-function getRegionName(position: MapPosition) {
-  const dungeonRegion = getDungeonRegionIndex(position);
-  if (dungeonRegion !== null) return REGION_NAMES[dungeonRegion];
-  const safeRegion = getSafeAreaRegionIndex(position);
-  return REGION_NAMES[safeRegion ?? 0];
-}
-
 type CardBlueprint = Omit<Card, "id" | "revealed">;
 
 const BASIC_CARD_POOL: CardBlueprint[] = [
@@ -1353,11 +1419,8 @@ const BASIC_CARD_POOL: CardBlueprint[] = [
 ];
 
 const LEGACY_SPECIAL_CARD_POOL: CardBlueprint[] = [
-  { kind: "strike", effect: "pommel", rarity: "special", name: "폼멜 타격", cost: 1, value: 6, draw: 1, damageType: "physical" },
   { kind: "defend", effect: "deflect", rarity: "special", name: "흘려보내기", cost: 1, value: 5, draw: 1, damageType: "physical" },
-  { kind: "skill", effect: "battlePlan", rarity: "special", name: "전투 설계", cost: 1, value: 0, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "prepare", rarity: "special", name: "예비", cost: 0, value: 0, draw: 1, damageType: "physical" },
-  { kind: "skill", effect: "sweep", rarity: "special", name: "뽑아내기", cost: 1, value: 0, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "drawEachPile", rarity: "special", name: "걷어내기", cost: 1, value: 0, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "rulerCompass", rarity: "special", name: "자와 컴퍼스", cost: 1, value: 6, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "berserk", rarity: "special", name: "광폭화", cost: 0, value: 0, draw: 0, damageType: "physical" },
@@ -1389,12 +1452,12 @@ const SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "plateArmor", rarity: "special", name: "판금 갑옷", cost: 1, value: 9, draw: 0, damageType: "physical", forgeCost: 2 },
   { kind: "skill", effect: "weaponSharpen", rarity: "special", name: "무기 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "armorSharpen", rarity: "special", name: "방어구 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
-  { kind: "strike", effect: "meteor", rarity: "special", name: "유성우", cost: 2, value: 9, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "meteor", rarity: "special", name: "유성우", cost: 2, value: 7, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "starGuard", rarity: "special", name: "별의 장막", cost: 2, value: 12, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "counter", rarity: "special", name: "응수", cost: 0, value: 0, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "strike", rarity: "special", name: "묵직한 한 방", cost: 3, value: 30, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "exchange", rarity: "special", name: "치환 합금", cost: 3, value: 15, draw: 0, damageType: "physical", forgeAny: true },
-  { kind: "skill", effect: "doubleHit", rarity: "special", name: "청동 철퇴", cost: 2, value: 15, draw: 0, damageType: "physical", forgeCosts: [2, 3] },
+  { kind: "strike", effect: "doubleHit", rarity: "special", name: "청동 철퇴", cost: 2, value: 15, draw: 0, damageType: "physical", forgeCosts: [2, 3] },
   { kind: "skill", effect: "ironWall", rarity: "special", name: "철벽", cost: 2, value: 2, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "combatManual", rarity: "special", name: "전투 교본", cost: 0, value: 2, draw: 0, damageType: "physical" },
 ];
@@ -1446,7 +1509,8 @@ function createDeck(): Card[] {
   });
   const blueprints: CardBlueprint[] = [
     ...make(6, BASIC_CARD_POOL[0]),
-    ...make(6, BASIC_CARD_POOL[1]),
+    ...make(4, BASIC_CARD_POOL[1]),
+    ...make(2, { ...BASIC_CARD_POOL[1], name: "마법 방어", damageType: "magic" }),
     ...starterSpecialCards,
   ];
   if (blueprints.length !== STARTING_DECK_SIZE) {
@@ -1900,12 +1964,16 @@ function EnemyIntentIcons({
   forceMagic,
   physicalResistance,
   magicResistance,
+  physicalVulnerability,
+  magicVulnerability,
 }: {
   action: EnemyAction;
   strength: number;
   forceMagic: boolean;
   physicalResistance: number;
   magicResistance: number;
+  physicalVulnerability: number;
+  magicVulnerability: number;
 }) {
   const [tooltipPoint, setTooltipPoint] = useState({ x: 0, y: 0, maxWidth: 280 });
   const [tooltipOpen, setTooltipOpen] = useState(false);
@@ -1925,6 +1993,9 @@ function EnemyIntentIcons({
     action.strengthGain && `힘 ${action.strengthGain} 획득`,
     action.blockGain && `방어 ${action.blockGain} 획득`,
     action.nextAttackMagic && "다음 공격이 마법 피해",
+    action.physicalVulnerabilityGain && `물리 취약 ${action.physicalVulnerabilityGain} 부여`,
+    action.nextTurnPhysicalVulnerabilityGain && `다음 턴 시작 시 물리 취약 ${action.nextTurnPhysicalVulnerabilityGain} 부여`,
+    action.nextTurnMagicVulnerabilityGain && `다음 턴 시작 시 마법 취약 ${action.nextTurnMagicVulnerabilityGain} 부여`,
     action.discardCount && `파일 맨 위 카드 ${action.discardCount}장 버리기`,
   ].filter(Boolean).join(" · ");
   const effectDescriptions = describedEffects || (action.attacks.length === 0 ? action.name : "");
@@ -1935,11 +2006,14 @@ function EnemyIntentIcons({
   const hasRepeatedAttackType = attackTypes.length > 1 && new Set(attackTypes).size === 1;
   const attackIcons = action.attacks.flatMap((attack, attackIndex) => {
     const damageType = forceMagic ? "magic" : attack.type;
-    const damage = reduceEnemyDamageByResistance(
+    const resistedDamage = reduceEnemyDamageByResistance(
       attack.value + strength,
       damageType,
       physicalResistance,
       magicResistance,
+    );
+    const damage = resistedDamage * vulnerabilityMultiplier(
+      damageType === "physical" ? physicalVulnerability : magicVulnerability,
     );
     return Array.from({ length: attack.hits ?? 1 }, (_, hitIndex) => (
       <span
@@ -2193,10 +2267,10 @@ function CardFace({
   );
 }
 
-function DeckEditorCardIcon({ card, count = 1, isTemporary = false }: {
+function DeckEditorCardIcon({ card, count = 1, showNewBadge = false }: {
   card: Card;
   count?: number;
-  isTemporary?: boolean;
+  showNewBadge?: boolean;
 }) {
   const cost = UNPLAYABLE_CARD_EFFECTS.has(card.effect)
     ? ""
@@ -2206,10 +2280,23 @@ function DeckEditorCardIcon({ card, count = 1, isTemporary = false }: {
       {cost !== "" && <span className="editor-card-cost">{cost}</span>}
       <strong className="editor-card-name">{card.name}{card.forged ? "+" : ""}</strong>
       {card.colored && <em className="deck-card-painted">색칠</em>}
-      {isTemporary && <em className="deck-card-new">NEW!</em>}
+      {showNewBadge && <em className="deck-card-new">NEW!</em>}
       {count > 1 && <span className="inventory-card-count">x{count}</span>}
     </>
   );
+}
+
+function deckEditorCardStackStyle(count: number) {
+  const layers = Math.min(5, Math.max(0, count - 1));
+  if (layers === 0) return undefined;
+  const shadows = Array.from({ length: layers }, (_, index) => {
+    const offset = (index + 1) * -7;
+    return `${offset}px 0 0 -4px #f7f4eb, ${offset}px 0 0 0 var(--editor-rarity)`;
+  });
+  return {
+    marginLeft: layers * 7,
+    "--editor-stack-shadow": shadows.join(", "),
+  } as CSSProperties;
 }
 
 function isRuleMatchedPlacement(movingCard: Card, targetCard?: Card) {
@@ -2246,6 +2333,75 @@ function getFloodPyramid(pile: Card[]) {
   return cards[1].cost === 3 && cards[2].cost === 2 && cards[3].cost === 1 ? cards : null;
 }
 
+function debugEnemyActionText(action: EnemyAction) {
+  const parts = action.attacks.map((attack) => {
+    const damageType = attack.type === "magic" ? "마법 피해" : "물리 피해";
+    return `${damageType} ${attack.value}${(attack.hits ?? 1) > 1 ? ` × ${attack.hits}` : ""}`;
+  });
+  if (action.strengthGain) parts.push(`힘 ${action.strengthGain} 획득`);
+  if (action.blockGain) parts.push(`방어 ${action.blockGain} 획득`);
+  if (action.nextAttackMagic) parts.push("다음 공격 마법화");
+  if (action.physicalVulnerabilityGain) parts.push(`물리 취약 ${action.physicalVulnerabilityGain} 부여`);
+  if (action.nextTurnPhysicalVulnerabilityGain) parts.push(`다음 턴 시작 시 물리 취약 ${action.nextTurnPhysicalVulnerabilityGain} 부여`);
+  if (action.nextTurnMagicVulnerabilityGain) parts.push(`다음 턴 시작 시 마법 취약 ${action.nextTurnMagicVulnerabilityGain} 부여`);
+  if (action.discardCount) parts.push(`파일 맨 위 ${action.discardCount}장 버리기`);
+  return parts.length > 0 ? parts.join(" · ") : "대기";
+}
+
+function debugEnemyPatternText(actions: EnemyAction[]) {
+  if (actions.length <= 1) return "고정 반복";
+  const loopActionIndex = actions.findIndex((action) => action.loopTo !== undefined);
+  if (loopActionIndex >= 0) return `처음부터 진행 후 ${actions[loopActionIndex].loopTo! + 1}번 행동부터 반복`;
+  if (actions.every((action) => action.cycle)) return "순서대로 반복";
+  if (actions.every((action) => action.randomEachTurn)) return "매 턴 무작위";
+  return "직전 행동을 제외하고 무작위";
+}
+
+function DebugEnemyCodex({ battle = false }: { battle?: boolean }) {
+  const entries = getEnemyCodexEntries();
+  return (
+    <details className={`debug-enemy-codex ${battle ? "is-battle" : ""}`}>
+      <summary>적 도감 ({entries.length})</summary>
+      <div className="debug-enemy-codex-panel">
+        {entries.map((entry) => (
+          <article key={entry.encounterIndex} className="debug-enemy-codex-entry">
+            <header>
+              <strong>{entry.label}</strong>
+              <span>
+                {entry.regions.length > 0 ? `${entry.regions.join(", ")}지역` : "현재 미출현"}
+              </span>
+            </header>
+            {entry.enemies.map(({ enemy, count }) => (
+              <div className="debug-enemy-codex-member" key={`${enemy.name}-${JSON.stringify(enemy.actions)}`}>
+                {entry.enemies.length > 1 && <strong>{enemy.name}{count > 1 ? ` × ${count}` : ""}</strong>}
+                <p>체력 {Math.floor(enemy.maxHp * 0.9)}~{enemy.maxHp} · 힘 {enemy.strength} · 방어 {enemy.physicalBlock}</p>
+                {(enemy.sturdyThreshold > 0 || enemy.quicknessReady || enemy.nextAttackMagic) && (
+                  <p>
+                    {[
+                      enemy.sturdyThreshold > 0 ? `단단함 ${enemy.sturdyThreshold}` : "",
+                      enemy.quicknessReady ? "재빠름 준비" : "",
+                      enemy.nextAttackMagic ? "첫 공격 마법화" : "",
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+                {enemy.trait && <p className="debug-enemy-trait">특성: {enemy.trait}</p>}
+                <p className="debug-enemy-pattern">패턴: {debugEnemyPatternText(enemy.actions)}</p>
+                <ol>
+                  {enemy.actions.map((action, index) => (
+                    <li key={`${action.name}-${index}`}>
+                      <strong>{action.name}</strong><span>{debugEnemyActionText(action)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </article>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("map");
   const [playerName, setPlayerName] = useState(createRandomPlayerName);
@@ -2280,6 +2436,7 @@ export default function Home() {
   const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const [mapZoom, setMapZoom] = useState(MAP_DEFAULT_ZOOM);
   const [mapTraveling, setMapTraveling] = useState(false);
+  const [mapCameraFocusing, setMapCameraFocusing] = useState(false);
   const [mindEyeMovesRemaining, setMindEyeMovesRemaining] = useState(0);
   const mindEyeMovesRemainingRef = useRef(0);
   const [mapTravelStepMs, setMapTravelStepMs] = useState(MAP_TRAVEL_STEP_MS);
@@ -2361,6 +2518,10 @@ export default function Home() {
   const [deckEditorMessage, setDeckEditorMessage] = useState("휴식 구역에서는 카드를 바닥으로 추출하고, 일반 구역에서는 제거 예정 상태로 만듭니다.");
   const [deckEditorSnapshot, setDeckEditorSnapshot] = useState<DeckEditorSnapshot | null>(null);
   const [openedCardPack, setOpenedCardPack] = useState<Card[] | null>(null);
+  const [battleCardView, setBattleCardView] = useState<"deck" | "piles" | "discard" | null>(null);
+  const [selectedHandCardId, setSelectedHandCardId] = useState<number | null>(null);
+  const [dyingEnemyIds, setDyingEnemyIds] = useState<Set<string>>(() => new Set());
+  const [transformedCardNewIds, setTransformedCardNewIds] = useState<Set<number>>(() => new Set());
   const [hoveredDeckCard, setHoveredDeckCard] = useState<Card | null>(null);
   const [hoveredConsumable, setHoveredConsumable] = useState<Consumable | null>(null);
   const [deckEditorSort, setDeckEditorSort] = useState<"cost" | "rarity">("cost");
@@ -2371,9 +2532,11 @@ export default function Home() {
   const [attackingEnemyId, setAttackingEnemyId] = useState<string | null>(null);
   const [damagePopup, setDamagePopup] = useState<DamagePopup | null>(null);
   const [enemyPopups, setEnemyPopups] = useState<Record<string, DamagePopup>>({});
+  const [animatedEnemyHp, setAnimatedEnemyHp] = useState<Record<string, number>>({});
   const enemyPopupKeyRef = useRef(0);
   const [pileClearNotice, setPileClearNotice] = useState(false);
   const nextCardIdRef = useRef(STARTING_DECK_SIZE);
+  const battleRewardRegionRef = useRef(1);
   const debugGoldClicksRef = useRef<number[]>([]);
   const nextConsumableIdRef = useRef(1);
   const deckSelectorCloseTimerRef = useRef<number | null>(null);
@@ -2387,10 +2550,8 @@ export default function Home() {
   const inventoryCapacity = INVENTORY_CAPACITY + (blessings.includes("bag") ? 12 : 0);
   const maxOwnedDecks = MAX_OWNED_DECKS + (blessings.includes("bag") ? 1 : 0);
   const maxPlayerHp = MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0);
-  const visionHorizontalRadius = mindEyeMovesRemaining > 0 ? 4 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
-  const visionVerticalRadius = mindEyeMovesRemaining > 0
-    ? 4
-    : blessings.includes("vision") ? 2 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
+  const visionHorizontalRadius = mindEyeMovesRemaining > 0 ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
+  const visionVerticalRadius = mindEyeMovesRemaining > 0 ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
   const editingDeck = ownedDecks.find((deck) => deck.id === deckEditorDeckId) ?? activeDeck;
   useEffect(() => {
     if (!ownedDecks.some((deck) => deck.id === "starter" && deck.name === "")) return;
@@ -2403,12 +2564,12 @@ export default function Home() {
     inventoryConsumablesRef.current = inventoryConsumables;
   }, [inventoryConsumables]);
   useEffect(() => {
-    if (!deckEditorOpen || pendingRemovedCards.length === 0) return;
+    if (!deckEditorOpen) return;
     const blinkTimer = window.setInterval(() => {
       setPendingRemovalBlinkDim((current) => !current);
     }, 525);
     return () => window.clearInterval(blinkTimer);
-  }, [deckEditorOpen, pendingRemovedCards.length]);
+  }, [deckEditorOpen]);
   useEffect(() => () => {
     if (deckSelectorCloseTimerRef.current !== null) {
       window.clearTimeout(deckSelectorCloseTimerRef.current);
@@ -2586,7 +2747,7 @@ export default function Home() {
       && battleRewardDecks.length === 0
       && battleRewardConsumables.length === 0
     ) {
-      grantBattleReward(getRegionNumber(mapPosition));
+      grantBattleReward(battleRewardRegionRef.current);
     }
   }, [screen, game.status, battleRewardGold, battleRewards.length, battleRewardDecks.length, battleRewardConsumables.length, mapPosition]);
 
@@ -2640,30 +2801,29 @@ export default function Home() {
     if (!activeShopRoom) return;
     const offer = (roomShops[activeShopRoom] ?? []).find((item) => item.id === offerId);
     if (!offer || offer.sold) return;
-    if (inventoryItemCount >= INVENTORY_CAPACITY) {
-      setShopMessage(`인벤토리가 가득 찼습니다. 카드와 소모품을 합쳐 ${INVENTORY_CAPACITY}개까지 보관할 수 있습니다.`);
-      return;
-    }
     if (gold < offer.price) {
       setShopMessage(`🪙 ${offer.price - gold}이 부족합니다.`);
       return;
     }
     setGold((current) => current - offer.price);
-    if (offer.card) setInventoryCards((current) => [...current, offer.card!]);
-    if (offer.consumable) setInventoryConsumables((current) => [...current, offer.consumable!]);
+    const inventoryFull = inventoryItemCount >= inventoryCapacity;
+    if (offer.card) {
+      if (inventoryFull) setRoomDrops((current) => ({ ...current, [activeShopRoom]: [...(current[activeShopRoom] ?? []), offer.card!] }));
+      else setInventoryCards((current) => [...current, offer.card!]);
+    }
+    if (offer.consumable) {
+      if (inventoryFull) setRoomConsumableDrops((current) => ({ ...current, [activeShopRoom]: [...(current[activeShopRoom] ?? []), offer.consumable!] }));
+      else setInventoryConsumables((current) => [...current, offer.consumable!]);
+    }
     setRoomShops((current) => ({
       ...current,
       [activeShopRoom]: (current[activeShopRoom] ?? []).map((item) =>
         item.id === offerId ? { ...item, sold: true } : item),
     }));
-    setShopMessage(`${offer.card?.name ?? offer.consumable?.name}을(를) 구매했습니다.`);
+    setShopMessage(`${offer.card?.name ?? offer.consumable?.name}을(를) 구매했습니다.${inventoryFull ? " 인벤토리가 가득 차 바닥에 놓았습니다." : ""}`);
   };
 
   const openCardPack = (packId: string) => {
-    if (inventoryItemCount + 4 > inventoryCapacity) {
-      setDeckEditorMessage("카드 팩을 열려면 인벤토리 빈칸이 4개 더 필요합니다.");
-      return;
-    }
     const pack = inventoryConsumables.find((item) => item.id === packId && item.type === "cardPack");
     if (!pack) return;
     const pool = [...SPECIAL_CARD_POOL, ...RARE_CARD_POOL];
@@ -2673,8 +2833,19 @@ export default function Home() {
       nextCardIdRef.current += 1;
       return card;
     });
+    const freeSlotsAfterPack = Math.max(0, inventoryCapacity - (inventoryItemCount - 1));
+    const inventoryCardsFromPack = cards.slice(0, freeSlotsAfterPack);
+    const floorCardsFromPack = cards.slice(freeSlotsAfterPack);
     setInventoryConsumables((current) => current.filter((item) => item.id !== packId));
-    setInventoryCards((current) => [...current, ...cards]);
+    setInventoryCards((current) => [...current, ...inventoryCardsFromPack]);
+    if (floorCardsFromPack.length > 0) {
+      const roomKey = mapRoomKey(mapPosition);
+      setRoomDrops((current) => ({
+        ...current,
+        [roomKey]: [...(current[roomKey] ?? []), ...floorCardsFromPack],
+      }));
+      setDeckEditorMessage(`인벤토리에 들어가지 못한 카드 ${floorCardsFromPack.length}장을 바닥에 놓았습니다.`);
+    }
     setOpenedCardPack(cards);
   };
   const pendingOriginsRef = useRef(new Map<number, DOMRect>());
@@ -2685,6 +2856,7 @@ export default function Home() {
   const timersRef = useRef<number[]>([]);
   const mapViewportRef = useRef<HTMLDivElement | null>(null);
   const mapTravelTimerRef = useRef<number | null>(null);
+  const mapFocusTimerRef = useRef<number | null>(null);
   const mapMovementKeysRef = useRef(new Set<string>());
   const mapMovementTimerRef = useRef<number | null>(null);
   const numpadMovementKeysRef = useRef(new Set<string>());
@@ -2842,9 +3014,14 @@ export default function Home() {
       window.clearTimeout(mapTravelTimerRef.current);
       mapTravelTimerRef.current = null;
     }
+    if (mapFocusTimerRef.current !== null) {
+      window.clearTimeout(mapFocusTimerRef.current);
+      mapFocusTimerRef.current = null;
+    }
     setMapCollisionEnemyIds([]);
     setMapBattleFlash(false);
     setMapTraveling(false);
+    setMapCameraFocusing(false);
   };
 
   const rememberPlayerVision = (
@@ -2854,8 +3031,8 @@ export default function Home() {
     previousEnemies: typeof mapEnemyWorld.enemies = [],
   ) => {
     const mindEyeActive = mindEyeMovesRemainingRef.current > 0;
-    const horizontalRadius = mindEyeActive ? 4 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
-    const verticalRadius = mindEyeActive ? 4 : blessings.includes("vision") ? 2 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
+    const horizontalRadius = mindEyeActive ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
+    const verticalRadius = mindEyeActive ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
     const visibleKeys = visibleMapRoomKeys(position, seed, horizontalRadius, verticalRadius);
     setSeenRooms((current) => new Set([...current, ...visibleKeys]));
     setMapEnemyCellMemory((current) => updateEnemyCellMemory(current, enemies, visibleKeys, previousEnemies));
@@ -2869,19 +3046,28 @@ export default function Home() {
       if (current[enemyId]?.key !== popup.key) return current;
       const { [enemyId]: _, ...remaining } = current;
       return remaining;
-    }), 760);
+    }), 1150);
   };
 
   const startBattle = (
     encounters: { encounterIndex: number; damageTaken?: number; awareness?: "sleeping" | "awake" | "alerted" }[],
     playerHp = runPlayerHp,
   ) => {
+    battleRewardRegionRef.current = Math.max(
+      1,
+      ...encounters.map((encounter) => getEncounterRegionNumber(encounter.encounterIndex)),
+    );
     clearBattleTimers();
     clearMapTravel();
     setDeckEditorOpen(false);
     setDeckViewerOpen(false);
     setDeckSelectorOpen(false);
     setDragging(null);
+    setBattleCardView(null);
+    setSelectedHandCardId(null);
+    setDyingEnemyIds(new Set());
+    setAnimatedEnemyHp({});
+    setHoveredDeckCard(null);
     setAttackingEnemyId(null);
     setDamagePopup(null);
     setBattleRewards([]);
@@ -2913,7 +3099,7 @@ export default function Home() {
       ? { ...nextGame, status: "won", message: "폭발 피해로 모든 적이 쓰러졌습니다." }
       : nextGame);
     setScreen("battle");
-    if (defeatedByBomb) grantBattleReward(getRegionNumber(mapPosition));
+    if (defeatedByBomb) grantBattleReward(battleRewardRegionRef.current);
     else later(drawCards, 360);
   };
 
@@ -3262,10 +3448,14 @@ export default function Home() {
     if (screen !== "map" || mapTraveling) return;
     const roomKey = mapRoomKey(mapPosition);
     const result = resolveMapStep(mapPosition, mapPosition, mapEnemyWorld);
-    rememberPlayerVision(mapPosition, mapSeed, result.world.enemies, mapEnemyWorld.enemies);
-    setMapEnemyWorld(result.world);
-    if (result.collisionEnemies.length > 0) {
-      animateMapCollision(result.collisionEnemies, roomKey);
+    const bombResult = advanceBombsAfterMovement(mapPosition, result.world);
+    const collisionIds = new Set(result.collisionEnemies.map((enemy) => enemy.id));
+    const collisionEnemies = bombResult.world.enemies.filter((enemy) => collisionIds.has(enemy.id));
+    rememberPlayerVision(mapPosition, mapSeed, bombResult.world.enemies, mapEnemyWorld.enemies);
+    setMapEnemyWorld(bombResult.world);
+    if (bombResult.playerDefeated) return;
+    if (collisionEnemies.length > 0) {
+      animateMapCollision(collisionEnemies, roomKey);
       return;
     }
   };
@@ -3494,13 +3684,24 @@ export default function Home() {
     showDeckCardPreview(card, event.clientX, event.clientY);
   };
 
+  const scrollDeckEditorCardsHorizontally = (event: ReactWheelEvent<HTMLDivElement>) => {
+    const row = event.currentTarget;
+    if (row.scrollWidth <= row.clientWidth) return;
+    const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+    if (delta === 0) return;
+    event.preventDefault();
+    row.scrollLeft += delta * 1.5;
+  };
+
   const moveDeckCardToInventory = (cardId: number, deckId = editingDeck?.id) => {
-    if (!isSafeAreaPosition(mapPosition)) {
+    const deck = ownedDecks.find((item) => item.id === deckId);
+    const card = deck?.cards.find((item) => item.id === cardId);
+    if (!deck || !card) return;
+    const isNewCard = !originalDeckIdForCard(cardId);
+    if (!isSafeAreaPosition(mapPosition) && !isNewCard) {
       showMapMessage("현재 위치에서는 불가능합니다.");
       return;
     }
-    const deck = ownedDecks.find((item) => item.id === deckId);
-    if (!deck) return;
     if (deck.cards.length <= 1) {
       setDeckEditorMessage("덱에는 반드시 카드가 1장 이상 있어야 합니다.");
       return;
@@ -3509,8 +3710,6 @@ export default function Home() {
       setDeckEditorMessage("인벤토리가 가득 찼습니다.");
       return;
     }
-    const card = deck.cards.find((item) => item.id === cardId);
-    if (!card) return;
     updateDeckCards(deck.id, (current) => current.filter((item) => item.id !== cardId));
     setInventoryCards((current) => [...current, card]);
     setDeckEditorMessage(`${card.name}을(를) 인벤토리로 옮겼습니다.`);
@@ -3525,15 +3724,16 @@ export default function Home() {
     }
     const card = deck.cards.find((item) => item.id === cardId);
     if (!card) return;
+    const isNewCard = !originalDeckIdForCard(cardId);
     updateDeckCards(deck.id, (current) => current.filter((item) => item.id !== cardId));
     setHoveredDeckCard(null);
-    if (isSafeAreaPosition(mapPosition)) {
+    if (isSafeAreaPosition(mapPosition) || isNewCard) {
       const roomKey = mapRoomKey(mapPosition);
       setRoomDrops((current) => ({
         ...current,
         [roomKey]: [...(current[roomKey] ?? []), card],
       }));
-      setDeckEditorMessage(`${card.name}을(를) 덱에서 바닥으로 추출했습니다.`);
+      setDeckEditorMessage(`${card.name}을(를) 덱에서 바닥으로 옮겼습니다.`);
       return;
     }
     setPendingRemovedCards((current) => [...current, card]);
@@ -3856,6 +4056,13 @@ export default function Home() {
       }
       setSeenRooms((current) => new Set(current).add(mapRoomKey(nearest)));
       setInventoryConsumables((current) => current.filter((item) => item.id !== consumable.id));
+      if (mapFocusTimerRef.current !== null) window.clearTimeout(mapFocusTimerRef.current);
+      setMapCameraFocusing(true);
+      focusMapOn(nearest);
+      mapFocusTimerRef.current = window.setTimeout(() => {
+        mapFocusTimerRef.current = null;
+        setMapCameraFocusing(false);
+      }, 360);
       setDeckEditorMessage(`가장 가까운 ${effectiveRoomType(nearest) === "shrine" ? "성소" : "모닥불"}의 위치를 밝혔습니다.`);
       return;
     }
@@ -4015,6 +4222,7 @@ export default function Home() {
       }));
     }
     setInventoryConsumables((current) => current.filter((item) => item.id !== pendingTransformTicketId));
+    setTransformedCardNewIds((current) => new Set(current).add(card.id));
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${card.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
   };
@@ -4053,6 +4261,11 @@ export default function Home() {
     const targetDeck = ownedDecks.find((deck) => deck.id === deckId);
     const card = pendingRemovedCards.find((item) => item.id === cardId);
     if (!targetDeck || !card) return;
+    const originalDeckId = originalDeckIdForCard(cardId);
+    if (!isSafeAreaPosition(mapPosition) && originalDeckId && targetDeck.id !== originalDeckId) {
+      showMapMessage("현재 위치에서는 원래 덱으로만 되돌릴 수 있습니다.");
+      return;
+    }
     if (targetDeck.cards.length >= targetDeck.capacity) {
       setDeckEditorMessage(`${targetDeck.name}에는 더 이상 카드를 넣을 수 없습니다.`);
       return;
@@ -4105,6 +4318,7 @@ export default function Home() {
     deckEditorDragRef.current = null;
     setDeckEditorDrag(null);
     setDeckEditorDropTarget(null);
+    deckPreviewSuppressedRef.current = false;
   };
 
   const finishDeckEditorDrag = () => {
@@ -4162,6 +4376,7 @@ export default function Home() {
     setArmedBombTicketIds(new Set());
     setPendingRemovedCards([]);
     setPendingRemovedCardAreas({});
+    setTransformedCardNewIds(new Set());
     setHoveredDeckCard(null);
     setDeckEditorDeckId(activeDeck?.id ?? "");
     setDeckEditorSnapshot({
@@ -4194,42 +4409,7 @@ export default function Home() {
     setDeckEditorSnapshot(null);
     setPendingRemovedCards([]);
     setPendingRemovedCardAreas({});
-    setHoveredDeckCard(null);
-    setPendingPaintTicketId(null);
-    setPendingCloneTicketId(null);
-    setPendingExtractTicketId(null);
-    setPendingTransformTicketId(null);
-    setArmedBombTicketIds(new Set());
-    finishConsumableDrag();
-    finishDeckEditorDrag();
-    setDeckEditorOpen(false);
-  };
-
-  const cancelDeckEditor = () => {
-    if (deckEditorSnapshot) {
-      setOwnedDecks(deckEditorSnapshot.decks);
-      const nextActiveDeckId = deckEditorSnapshot.decks.some((deck) => deck.id === deckEditorDeckId)
-        ? deckEditorDeckId
-        : deckEditorSnapshot.activeDeckId;
-      setActiveDeckId(nextActiveDeckId);
-      setInventoryCards(deckEditorSnapshot.inventory);
-      setInventoryConsumables(deckEditorSnapshot.consumables);
-      setRoomDrops((current) => ({
-        ...current,
-        [deckEditorSnapshot.roomKey]: deckEditorSnapshot.floorCards,
-      }));
-      setRoomConsumableDrops((current) => ({
-        ...current,
-        [deckEditorSnapshot.roomKey]: deckEditorSnapshot.floorConsumables,
-      }));
-      setRoomDeckDrops((current) => ({
-        ...current,
-        [deckEditorSnapshot.roomKey]: deckEditorSnapshot.floorDecks,
-      }));
-    }
-    setDeckEditorSnapshot(null);
-    setPendingRemovedCards([]);
-    setPendingRemovedCardAreas({});
+    setTransformedCardNewIds(new Set());
     setHoveredDeckCard(null);
     setPendingPaintTicketId(null);
     setPendingCloneTicketId(null);
@@ -4248,7 +4428,7 @@ export default function Home() {
 
       if (deckEditorOpen && (event.key === "Escape" || event.key.toLowerCase() === "i")) {
         event.preventDefault();
-        cancelDeckEditor();
+        confirmDeckEditor();
         return;
       }
 
@@ -4354,7 +4534,7 @@ export default function Home() {
       numpadMovementKeysRef.current.clear();
     };
   }, [
-    blessingOpen, cancelDeckEditor, deckEditorOpen, deckViewerOpen, mapTraveling,
+    blessingOpen, confirmDeckEditor, deckEditorOpen, deckViewerOpen, mapTraveling,
     moveOnMap, openDeckEditor, quickPickUpFloorItems, screen, shopOpen, shrineOpen, waitOnMap,
   ]);
 
@@ -4524,8 +4704,7 @@ export default function Home() {
   const defeatEnemiesForDebug = () => {
     if (!debugMode || game.status !== "playing") return;
     clearBattleTimers();
-    const regionNumber = getRegionNumber(mapPosition);
-    grantBattleReward(regionNumber);
+    grantBattleReward(battleRewardRegionRef.current);
     setPhase("playing");
     setGame((current) => current.status !== "playing"
       ? current
@@ -4542,7 +4721,7 @@ export default function Home() {
         });
   };
 
-  const playCard = (card: Card, targetEnemyId?: string) => {
+  const resolvePlayedCard = (card: Card, targetEnemyId?: string) => {
     if (UNPLAYABLE_CARD_EFFECTS.has(card.effect)) {
       setGame((current) => ({ ...current, message: `${card.name}은(는) 사용할 수 없습니다. 파일 위로 옮겨 길을 만들어 보세요.` }));
       return;
@@ -4554,7 +4733,9 @@ export default function Home() {
       : card.effect === "meteor" || card.effect === "hydra"
         ? game.enemies.find((enemy) => enemy.hp > 0)
         : game.enemies.find((enemy) => enemy.id === targetEnemyId);
-    const hydraTargetRolls = Array.from({ length: 18 }, () => Math.random());
+    const randomTargetRolls = Array.from({ length: Math.max(18, game.starsSpent * 2) }, () => Math.random());
+    let resolvedEnemiesAfterAttack: EnemyState[] | null = null;
+    let waitForLethalHitPopups = false;
     const canResolveRewardAttack = isRewardAttack
       && game.status === "playing"
       && phase === "playing"
@@ -4565,34 +4746,96 @@ export default function Home() {
       && game.energy >= card.cost
       && (isRewardAttackAll || Boolean(rewardTarget && rewardTarget.hp > 0));
     if (canResolveRewardAttack) {
-      const repetitions = (card.effect === "doubleHit" && card.forged ? 2 : 1) * (game.doubleNextAttack ? 2 : 1);
+      const repetitions = (
+        card.effect === "hydra" ? 9
+          : card.effect === "meteor" ? game.starsSpent
+            : card.effect === "fourHit" ? 4
+              : card.effect === "doubleHit" && card.forged ? 2 : 1
+      ) * (game.doubleNextAttack ? 2 : 1);
       const combatManualBonus = game.hand
         .filter((item) => item.effect === "combatManual")
         .reduce((total, item) => total + item.value, 0);
       const damage = card.value + game.strength + combatManualBonus;
       let enemiesAfterAttack = game.enemies;
-      if (card.effect === "hydra") {
-        for (let hit = 0; hit < 9 * (game.doubleNextAttack ? 2 : 1); hit += 1) {
+      const hitPopups: Array<{ enemyId: string; damage: number; remainingHp: number }> = [];
+      const hitEnemy = (enemyId: string) => {
+        enemiesAfterAttack = enemiesAfterAttack.map((enemy) => {
+          if (enemy.id !== enemyId) return enemy;
+          const nextEnemy = applyPlayerAttack(enemy, damage, 1, card.damageType);
+          const dealtDamage = enemy.hp - nextEnemy.hp;
+          if (dealtDamage > 0) hitPopups.push({ enemyId, damage: dealtDamage, remainingHp: nextEnemy.hp });
+          return nextEnemy;
+        });
+      };
+      if (card.effect === "hydra" || card.effect === "meteor") {
+        for (let hit = 0; hit < repetitions; hit += 1) {
           const living = enemiesAfterAttack.filter((enemy) => enemy.hp > 0);
           if (living.length === 0) break;
-          const target = living[Math.floor(hydraTargetRolls[hit] * living.length)];
-          enemiesAfterAttack = enemiesAfterAttack.map((enemy) => enemy.id === target.id
-            ? applyPlayerAttack(enemy, damage, 1, card.damageType)
-            : enemy);
+          const target = living[Math.floor(randomTargetRolls[hit] * living.length)];
+          hitEnemy(target.id);
         }
+      } else if (isRewardAttackAll) {
+        game.enemies.filter((enemy) => enemy.hp > 0).forEach((enemy) => {
+          for (let hit = 0; hit < repetitions; hit += 1) hitEnemy(enemy.id);
+        });
+      } else if (rewardTarget) {
+        for (let hit = 0; hit < repetitions; hit += 1) hitEnemy(rewardTarget.id);
       } else {
-        enemiesAfterAttack = game.enemies.map((enemy) => isRewardAttackAll || enemy.id === rewardTarget?.id
-          ? applyPlayerAttack(enemy, damage, repetitions, card.damageType)
-          : enemy);
+        enemiesAfterAttack = game.enemies;
       }
-      enemiesAfterAttack.forEach((enemy) => {
-        const before = game.enemies.find((currentEnemy) => currentEnemy.id === enemy.id);
-        const dealtDamage = before ? before.hp - enemy.hp : 0;
-        if (dealtDamage > 0) showEnemyPopup(enemy.id, `-${dealtDamage}`);
+      resolvedEnemiesAfterAttack = enemiesAfterAttack;
+      if (hitPopups.length > 0) {
+        setAnimatedEnemyHp((current) => {
+          const next = { ...current };
+          hitPopups.forEach(({ enemyId }) => {
+            if (next[enemyId] !== undefined) return;
+            const enemyBeforeHit = game.enemies.find((enemy) => enemy.id === enemyId);
+            if (enemyBeforeHit) next[enemyId] = enemyBeforeHit.hp;
+          });
+          return next;
+        });
+      }
+      hitPopups.forEach((popup, index) => {
+        later(() => {
+          showEnemyPopup(popup.enemyId, `-${popup.damage}`);
+          setAnimatedEnemyHp((current) => ({ ...current, [popup.enemyId]: popup.remainingHp }));
+        }, index * 220);
       });
+      const lastPopupIndexByEnemy = new Map<string, number>();
+      hitPopups.forEach((popup, index) => lastPopupIndexByEnemy.set(popup.enemyId, index));
+      lastPopupIndexByEnemy.forEach((lastPopupIndex, enemyId) => {
+        later(() => setAnimatedEnemyHp((current) => {
+          const next = { ...current };
+          delete next[enemyId];
+          return next;
+        }), lastPopupIndex * 220 + 240);
+      });
+      const newlyDefeatedEnemyIds = game.enemies
+        .filter((enemy) => enemy.hp > 0 && enemiesAfterAttack.some((nextEnemy) => nextEnemy.id === enemy.id && nextEnemy.hp === 0))
+        .map((enemy) => enemy.id);
+      if (newlyDefeatedEnemyIds.length > 0) {
+        setDyingEnemyIds((current) => new Set([...current, ...newlyDefeatedEnemyIds]));
+        newlyDefeatedEnemyIds.forEach((enemyId) => {
+          const lastPopupIndex = hitPopups.reduce((last, popup, index) => popup.enemyId === enemyId ? index : last, 0);
+          later(() => setDyingEnemyIds((current) => {
+            const next = new Set(current);
+            next.delete(enemyId);
+            return next;
+          }), lastPopupIndex * 220 + 1150);
+        });
+      }
       if (enemiesAfterAttack.every((enemy) => enemy.hp === 0)) {
-        const regionNumber = getRegionNumber(mapPosition);
-        grantBattleReward(regionNumber);
+        waitForLethalHitPopups = true;
+        setPhase("resolving");
+        later(() => {
+          setGame((current) => current.status !== "playing" ? current : {
+            ...current,
+            status: "won",
+            message: "승리! 모든 적을 쓰러뜨렸습니다.",
+          });
+          setPhase("playing");
+          grantBattleReward(battleRewardRegionRef.current);
+        }, Math.max(1150, (hitPopups.length - 1) * 220 + 1150));
       }
     }
 
@@ -4640,19 +4883,8 @@ export default function Home() {
       const grimoireBonus = current.hand.filter((item) => item.effect === "grimoire").length;
       const damagePerHit = isDamageCard ? card.value + current.strength + combatManualBonus : 0;
       const damage = damagePerHit * repetitions;
-      let hydraEnemies = current.enemies;
-      if (isHydra) {
-        for (let hit = 0; hit < repetitions; hit += 1) {
-          const living = hydraEnemies.filter((enemy) => enemy.hp > 0);
-          if (living.length === 0) break;
-          const target = living[Math.floor(hydraTargetRolls[hit] * living.length)];
-          hydraEnemies = hydraEnemies.map((enemy) => enemy.id === target.id
-            ? applyPlayerAttack(enemy, damagePerHit, 1, card.damageType)
-            : enemy);
-        }
-      }
-      const nextEnemies = isHydra
-        ? hydraEnemies
+      const nextEnemies = isDamageCard && resolvedEnemiesAfterAttack
+        ? resolvedEnemiesAfterAttack
         : isDamageCard
         ? current.enemies.map((enemy) => isAttackAll || enemy.id === targetEnemy?.id
           ? applyPlayerAttack(enemy, damagePerHit, repetitions, card.damageType)
@@ -4810,11 +5042,37 @@ export default function Home() {
           : card.kind === "strike"
             ? false
             : current.doubleNextAttack,
-        status: won ? "won" : current.status,
-        message: won ? "승리! 모든 적을 쓰러뜨렸습니다." : `${action}${card.effect === "prepare" || card.effect === "focus" ? "" : drawMessage}`,
+        status: won && !waitForLethalHitPopups ? "won" : current.status,
+        message: won && !waitForLethalHitPopups ? "승리! 모든 적을 쓰러뜨렸습니다." : `${action}${card.effect === "prepare" || card.effect === "focus" ? "" : drawMessage}`,
         history: [action, ...current.history].slice(0, 5),
       };
     });
+  };
+
+  const playCard = (card: Card, targetEnemyId?: string) => {
+    const sourceCard = handCardRefs.current.get(card.id);
+    const energyCost = card.effect === "ironWall" ? IRON_WALL_COST : card.cost;
+    const shouldAnimate = sourceCard
+      && screen === "battle"
+      && phase === "playing"
+      && game.status === "playing"
+      && !UNPLAYABLE_CARD_EFFECTS.has(card.effect)
+      && game.energy >= energyCost;
+    if (!shouldAnimate) {
+      resolvePlayedCard(card, targetEnemyId);
+      return;
+    }
+    const flightDuration = animatePlayedCardToCenter(sourceCard);
+    if (flightDuration === 0) {
+      resolvePlayedCard(card, targetEnemyId);
+      return;
+    }
+    setSelectedHandCardId(null);
+    setPhase("resolving");
+    later(() => {
+      setPhase("playing");
+      resolvePlayedCard(card, targetEnemyId);
+    }, flightDuration);
   };
 
   const playHandCardOnDoubleClick = (card: Card) => {
@@ -4825,6 +5083,49 @@ export default function Home() {
       : undefined;
     playCard(card, targetEnemy?.id);
   };
+
+  const playSelectedHandCardOnEnemy = (enemyId: string) => {
+    if (screen !== "battle" || phase !== "playing" || game.status !== "playing" || selectedHandCardId === null) return;
+    const card = game.hand.find((item) => item.id === selectedHandCardId);
+    if (!card || (card.kind !== "strike" && card.effect !== "doubleHit")) return;
+    setSelectedHandCardId(null);
+    playCard(card, enemyId);
+  };
+
+  useEffect(() => {
+    const handleBattleCardKeyboard = (event: KeyboardEvent) => {
+      if (screen !== "battle" || phase !== "playing" || game.status !== "playing" || event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+
+      const activateSelectedCard = (card: Card) => {
+        setSelectedHandCardId(null);
+        playHandCardOnDoubleClick(card);
+      };
+      if (event.key === "Enter" && selectedHandCardId !== null) {
+        const card = game.hand.find((item) => item.id === selectedHandCardId);
+        if (!card) return;
+        event.preventDefault();
+        activateSelectedCard(card);
+        return;
+      }
+      if (!/^\d$/.test(event.key)) return;
+      const handIndex = event.key === "0" ? 9 : Number(event.key) - 1;
+      const keyboardHand = [
+        ...game.hand
+          .filter((card) => card.drawSlot !== undefined)
+          .sort((left, right) => left.drawSlot! - right.drawSlot!),
+        ...game.hand.filter((card) => card.drawSlot === undefined),
+      ];
+      const card = keyboardHand[handIndex];
+      if (!card) return;
+      event.preventDefault();
+      if (selectedHandCardId === card.id) activateSelectedCard(card);
+      else setSelectedHandCardId(card.id);
+    };
+    window.addEventListener("keydown", handleBattleCardKeyboard);
+    return () => window.removeEventListener("keydown", handleBattleCardKeyboard);
+  }, [game.hand, game.status, phase, playHandCardOnDoubleClick, screen, selectedHandCardId]);
 
   const drawSelectedPile = (pileIndex: number) => {
     if ((game.pendingDraws < 1 && game.pendingPileDrawCount < 1) || phase !== "playing" || game.status !== "playing") return;
@@ -5078,7 +5379,7 @@ export default function Home() {
           }
         }
         if (nextEnemies.every((enemy) => enemy.hp === 0)) {
-          grantBattleReward(getRegionNumber(mapPosition));
+          grantBattleReward(battleRewardRegionRef.current);
         }
       } else if (floodPyramid) {
         nextPiles[targetPileIndex].splice(-4);
@@ -5116,6 +5417,35 @@ export default function Home() {
     });
   };
 
+  const moveSelectedHandCardToPile = (targetPileIndex: number) => {
+    if (
+      selectedHandCardId === null ||
+      game.status !== "playing" ||
+      game.pendingDraws > 0 ||
+      game.pendingPileDrawCount > 0 ||
+      game.pendingDiscards > 0 ||
+      game.pendingSweep ||
+      phase !== "playing"
+    ) return false;
+    const card = game.hand.find((item) => item.id === selectedHandCardId);
+    if (!card) return false;
+    const targetCard = game.piles[targetPileIndex]?.at(-1);
+    const canPlace = Boolean(game.piles[targetPileIndex])
+      && game.stars >= 1
+      && canPlaceBySolitaireRule(card, targetCard);
+    const selectedDrag: DragState = {
+      card,
+      cards: [card],
+      source: { type: "hand" },
+      x: 0,
+      y: 0,
+      moved: true,
+    };
+    moveCardToPile(selectedDrag, targetPileIndex);
+    if (canPlace) setSelectedHandCardId(null);
+    return true;
+  };
+
   const finishDrag = (event: ReactPointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     if (!current) return;
@@ -5145,7 +5475,10 @@ export default function Home() {
       }
 
       const isTargetedAttack = current.card.kind === "strike" || current.card.effect === "doubleHit";
-      const resolvedTargetEnemyId = targetEnemyId;
+      const resolvedTargetEnemyId = targetEnemyId
+        ?? (isTargetedAttack && dropZone === "defend"
+          ? game.enemies.find((enemy) => enemy.hp > 0)?.id
+          : undefined);
       const validDrop =
         current.source.type === "hand" && !["slime", "combatManual", "grimoire"].includes(current.card.effect) && (
           (isTargetedAttack && Boolean(resolvedTargetEnemyId)) ||
@@ -5191,7 +5524,7 @@ export default function Home() {
     setPhase("discarding");
     setDragging(null);
 
-    const discardDelay = 340 + Math.max(0, game.hand.length - 1) * 42;
+    const discardDelay = 180 + Math.max(0, game.hand.length - 1) * 25;
     later(() => {
       const enemiesAfterBlockDecay = game.enemies.map((enemy) => ({ ...enemy, physicalBlock: 0 }));
       const livingEnemies = enemiesAfterBlockDecay.filter((enemy) => enemy.hp > 0);
@@ -5211,6 +5544,8 @@ export default function Home() {
         resistance: game.playerMagicResistance,
         vulnerability: game.playerMagicVulnerability,
       };
+      let nextTurnPhysicalVulnerabilityGain = 0;
+      let nextTurnMagicVulnerabilityGain = 0;
       const toxicSlimeBlocked = game.invulnerable ? 0 : Math.min(toxicSlimeDamage, remainingPhysicalBlock);
       const toxicSlimeDamageTaken = game.invulnerable ? 0 : toxicSlimeDamage - toxicSlimeBlocked;
       remainingPhysicalBlock -= toxicSlimeBlocked;
@@ -5313,6 +5648,32 @@ export default function Home() {
             message: `물리 취약 ${physicalStatus.vulnerability} 부여`,
           });
         }
+        if (action.nextTurnPhysicalVulnerabilityGain) {
+          nextTurnPhysicalVulnerabilityGain += action.nextTurnPhysicalVulnerabilityGain;
+          steps.push({
+            enemy,
+            action,
+            attack: null,
+            damage: 0,
+            hpAfter: remainingHp,
+            physicalBlockAfter: remainingPhysicalBlock,
+            magicBlockAfter: remainingMagicBlock,
+            message: `다음 턴 시작 시 물리 취약 ${action.nextTurnPhysicalVulnerabilityGain} 부여`,
+          });
+        }
+        if (action.nextTurnMagicVulnerabilityGain) {
+          nextTurnMagicVulnerabilityGain += action.nextTurnMagicVulnerabilityGain;
+          steps.push({
+            enemy,
+            action,
+            attack: null,
+            damage: 0,
+            hpAfter: remainingHp,
+            physicalBlockAfter: remainingPhysicalBlock,
+            magicBlockAfter: remainingMagicBlock,
+            message: `다음 턴 시작 시 마법 취약 ${action.nextTurnMagicVulnerabilityGain} 부여`,
+          });
+        }
         if (action.discardCount && enemy.discardPileIndex !== undefined) {
           const pileIndex = enemy.discardPileIndex % Math.max(1, pilesAfterSlime.length);
           const pile = pilesAfterSlime[pileIndex];
@@ -5377,19 +5738,19 @@ export default function Home() {
       setPhase("enemy-turn");
 
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const stepDuration = reducedMotion ? 80 : 410;
-      const hitAt = reducedMotion ? 20 : 195;
-      const clearAt = reducedMotion ? 50 : 360;
-      const slimeFlightGap = reducedMotion ? 20 : 80;
+      const stepDuration = reducedMotion ? 80 : 220;
+      const hitAt = reducedMotion ? 20 : 105;
+      const clearAt = reducedMotion ? 50 : 195;
+      const slimeFlightGap = reducedMotion ? 20 : 50;
       const slimeFlightDuration = toxicSlimeFlights.length > 0
-        ? (reducedMotion ? 120 : 820) + Math.max(0, toxicSlimeFlights.length - 1) * slimeFlightGap
+        ? (reducedMotion ? 120 : 460) + Math.max(0, toxicSlimeFlights.length - 1) * slimeFlightGap
         : 0;
 
       if (toxicSlimeDamage > 0) {
         const playerHealth = document.querySelector<HTMLElement>(".player-health-popup-anchor");
         if (playerHealth) {
           toxicSlimeFlights.forEach((flight, index) => {
-            animateCardToPlayer(flight.element, flight.rect, playerHealth, index * slimeFlightGap);
+            animateCardToPlayer(flight.element, flight.rect, playerHealth, index * slimeFlightGap, 460);
           });
         }
         later(() => {
@@ -5404,7 +5765,7 @@ export default function Home() {
             playerPhysicalBlock: physicalBlockAfterToxicSlime,
             playerMagicBlock: magicBlockAfterToxicSlime,
           }));
-        }, toxicSlimeFlights.length > 0 ? (reducedMotion ? 60 : 680) + Math.max(0, toxicSlimeFlights.length - 1) * slimeFlightGap : 0);
+        }, toxicSlimeFlights.length > 0 ? (reducedMotion ? 60 : 380) + Math.max(0, toxicSlimeFlights.length - 1) * slimeFlightGap : 0);
       }
 
       steps.forEach((step, index) => {
@@ -5483,7 +5844,7 @@ export default function Home() {
             history: [...attackHistory, ...game.history].slice(0, 5),
           });
           setPhase("playing");
-          grantBattleReward(getRegionNumber(mapPosition));
+          grantBattleReward(battleRewardRegionRef.current);
           return;
         }
 
@@ -5509,6 +5870,8 @@ export default function Home() {
             return { pilesBeforeDraw: rebuilt, pilesAfterDraw: redraw.piles, hand: redraw.hand };
           })()
           : null;
+        const nextTurnPhysicalStatus = decayThenAddVulnerability(physicalStatus, nextTurnPhysicalVulnerabilityGain);
+        const nextTurnMagicStatus = decayThenAddVulnerability(magicStatus, nextTurnMagicVulnerabilityGain);
         setGame({
           ...game,
           piles: pilesAfterSlime,
@@ -5523,10 +5886,10 @@ export default function Home() {
           playerHp: remainingHp,
           playerPhysicalBlock: 0,
           playerMagicBlock: 0,
-          playerPhysicalResistance: Math.max(0, physicalStatus.resistance - 1),
-          playerMagicResistance: Math.max(0, magicStatus.resistance - 1),
-          playerPhysicalVulnerability: Math.max(0, physicalStatus.vulnerability - 1),
-          playerMagicVulnerability: Math.max(0, magicStatus.vulnerability - 1),
+          playerPhysicalResistance: nextTurnPhysicalStatus.resistance,
+          playerMagicResistance: nextTurnMagicStatus.resistance,
+          playerPhysicalVulnerability: nextTurnPhysicalStatus.vulnerability,
+          playerMagicVulnerability: nextTurnMagicStatus.vulnerability,
           strength: Math.max(0, game.strength - game.temporaryStrength),
           temporaryStrength: 0,
           defenseMultiplier: 1,
@@ -5538,7 +5901,7 @@ export default function Home() {
         });
         setPhase("drawing");
         later(drawCards, 120);
-      }, slimeFlightDuration + steps.length * stepDuration + 80);
+      }, slimeFlightDuration + steps.length * stepDuration + 260);
     }, discardDelay);
   };
 
@@ -5636,7 +5999,8 @@ export default function Home() {
       : card.effect === "ironWall" ? IRON_WALL_COST : card.cost;
     const groupAndSortCards = (cards: Card[]) => Array.from(cards.reduce((groups, card) => {
       const groupKey = [card.name, card.effect, card.damageType, card.cost, card.value, card.rarity,
-        card.colored ? "painted" : "plain", card.forged ? "forged" : "normal", card.enemyToken ? "token" : "card"].join(":");
+        card.colored ? "painted" : "plain", card.forged ? "forged" : "normal", card.enemyToken ? "token" : "card",
+        transformedCardNewIds.has(card.id) ? "transformed-new" : "regular"].join(":");
       const current = groups.get(groupKey);
       if (current) current.cardIds.push(card.id);
       else groups.set(groupKey, { card, cardIds: [card.id] });
@@ -5658,21 +6022,6 @@ export default function Home() {
     const removedFloorCardGroups = groupAndSortCards(
       pendingRemovedCards.filter((card) => pendingRemovedCardAreas[card.id] !== "inventory"),
     );
-    const deckEditorHasChanges = deckEditorSnapshot !== null && JSON.stringify({
-      decks: deckEditorSnapshot.decks,
-      inventory: deckEditorSnapshot.inventory,
-      consumables: deckEditorSnapshot.consumables,
-      floorCards: deckEditorSnapshot.floorCards,
-      floorConsumables: deckEditorSnapshot.floorConsumables,
-      floorDecks: deckEditorSnapshot.floorDecks,
-    }) !== JSON.stringify({
-      decks: ownedDecks,
-      inventory: inventoryCards,
-      consumables: inventoryConsumables,
-      floorCards: currentFloorCards,
-      floorConsumables: currentFloorConsumables,
-      floorDecks: currentFloorDecks,
-    });
     const floorItemNames = [
       ...currentFloorCards.map((card) => card.name),
       ...currentFloorConsumables.map((consumable) => consumable.name),
@@ -5713,42 +6062,58 @@ export default function Home() {
         - MAP_WORLD_MARGIN_Y + 2,
     );
     const mapCellMap = new Map<string, MapPosition>();
-    seenRooms.forEach((seenRoomKey) => {
-      const position = parseMapRoomKey(seenRoomKey);
-      mapCellMap.set(seenRoomKey, position);
-    });
-    for (let offsetY = -visionVerticalRadius; offsetY <= visionVerticalRadius; offsetY += 1) {
-      for (let offsetX = -visionHorizontalRadius; offsetX <= visionHorizontalRadius; offsetX += 1) {
-        const position = {
-          x: mapPosition.x + offsetX,
-          y: mapPosition.y + offsetY,
-        };
-        if (getRoomType(position, mapSeed) !== "void") {
-          mapCellMap.set(mapRoomKey(position), position);
+    const currentSafeRegion = getSafeAreaRegionIndex(mapPosition);
+    const currentVisibleRoomKeys = currentSafeRegion === null
+      ? visibleMapRoomKeys(mapPosition, mapSeed, visionHorizontalRadius, visionVerticalRadius)
+      : new Set<string>();
+    if (currentSafeRegion !== null) {
+      const centerY = safeAreaCenterY(currentSafeRegion);
+      for (let offsetY = -2; offsetY <= 2; offsetY += 1) {
+        for (let offsetX = -2; offsetX <= 2; offsetX += 1) {
+          if (Math.abs(offsetX) === 2 && Math.abs(offsetY) === 2) continue;
+          const position = { x: SAFE_AREA_HEAL_X + offsetX, y: centerY + offsetY };
+          const roomKey = mapRoomKey(position);
+          mapCellMap.set(roomKey, position);
+          currentVisibleRoomKeys.add(roomKey);
         }
       }
-    }
-    if (debugMode) {
-      for (let y = debugMinY; y <= debugMaxY; y += 1) {
-        for (let x = debugMinX; x <= debugMaxX; x += 1) {
-          const position = { x, y };
-          if (getRoomType(position, mapSeed) !== "void") {
-            mapCellMap.set(mapRoomKey(position), position);
+    } else {
+      seenRooms.forEach((seenRoomKey) => {
+        const position = parseMapRoomKey(seenRoomKey);
+        mapCellMap.set(seenRoomKey, position);
+      });
+      currentVisibleRoomKeys.forEach((roomKey) => {
+        mapCellMap.set(roomKey, parseMapRoomKey(roomKey));
+      });
+      if (debugMode) {
+        for (let y = debugMinY; y <= debugMaxY; y += 1) {
+          for (let x = debugMinX; x <= debugMaxX; x += 1) {
+            const position = { x, y };
+            if (getRoomType(position, mapSeed) !== "void") {
+              mapCellMap.set(mapRoomKey(position), position);
+            }
           }
         }
+      }
+      for (const [roomKey, position] of mapCellMap) {
+        const safeLayoutRegion = getSafeAreaLayoutRegionIndex(position);
+        if (
+          safeLayoutRegion !== null
+          && distanceToSafeArea(mapPosition, safeLayoutRegion) > SAFE_AREA_REVEAL_RADIUS
+        ) mapCellMap.delete(roomKey);
       }
     }
     const mapCells = Array.from(mapCellMap.values());
     const renderedMapCellKeys = new Set(mapCells.map(mapRoomKey));
-    const visibleMapEnemies = debugMode
-      ? mapEnemyWorld.enemies.filter((enemy) => renderedMapCellKeys.has(mapRoomKey(enemy.position)))
-      : mapEnemyWorld.enemies.filter((enemy) => isInPlayerVision(enemy.position, mapPosition, visionHorizontalRadius, visionVerticalRadius));
+    const visibleMapEnemies = mapEnemyWorld.enemies.filter((enemy) =>
+      renderedMapCellKeys.has(mapRoomKey(enemy.position))
+      && (debugMode || currentVisibleRoomKeys.has(mapRoomKey(enemy.position))));
     const rememberedEnemyCells = debugMode
       ? []
       : Object.entries(mapEnemyCellMemory)
         .filter(([roomKey]) => {
           if (!renderedMapCellKeys.has(roomKey)) return false;
-          return !isInPlayerVision(parseMapRoomKey(roomKey), mapPosition, visionHorizontalRadius, visionVerticalRadius);
+          return !currentVisibleRoomKeys.has(roomKey);
         })
         .map(([roomKey, memory]) => ({ roomKey, position: parseMapRoomKey(roomKey), ...memory }));
 
@@ -5793,13 +6158,15 @@ export default function Home() {
           </div>
         )}
         <header className="topbar map-topbar">
-          <div>
-            <h1>{getRegionName(mapPosition)}</h1>
-          </div>
           <div className="map-top-actions">
             <div className="map-run-stats">
-              <div className="map-health" aria-label={`체력 ${runPlayerHp} 중 ${maxPlayerHp}`}>
-                <strong>❤️ {runPlayerHp} / {maxPlayerHp}</strong>
+              <div
+                className="healthbar map-health"
+                aria-label={`체력 ${runPlayerHp} 중 ${maxPlayerHp}`}
+                style={{ "--map-health-width": `${165 * Math.min(2, Math.max(1, maxPlayerHp / MAX_PLAYER_HP))}px` } as CSSProperties}
+              >
+                <i style={{ width: `${(runPlayerHp / maxPlayerHp) * 100}%` }} />
+                <span>{runPlayerHp} / {maxPlayerHp}</span>
               </div>
               {mindEyeMovesRemaining > 0 && <div className="map-mind-eye" aria-label={`심안 시야 ${mindEyeMovesRemaining}회 남음`}>심안 9×9 · {mindEyeMovesRemaining}</div>}
               <button
@@ -5808,7 +6175,7 @@ export default function Home() {
                 onClick={handleGoldDebugClick}
                 aria-label={`골드 ${gold}`}
               >
-                <strong>🪙 {gold}</strong>
+                <strong>$ {gold}</strong>
               </button>
             </div>
             <button
@@ -5904,6 +6271,7 @@ export default function Home() {
                   바닥에 생성
                 </button>
               </div>
+              <DebugEnemyCodex />
             </div>
           )}
 
@@ -5918,7 +6286,7 @@ export default function Home() {
             onWheel={zoomMap}
           >
             <div
-              className={`map-canvas ${mapTraveling ? "is-traveling" : ""}`}
+              className={`map-canvas ${mapTraveling ? "is-traveling" : ""} ${mapCameraFocusing ? "is-camera-focusing" : ""}`}
               style={{
                 width: mapWidth,
                 height: mapHeight,
@@ -5934,8 +6302,9 @@ export default function Home() {
               {mapCells.map((position) => {
                 const roomKey = mapRoomKey(position);
                 const roomType = effectiveRoomType(position);
+                const dungeonRegionIndex = getDungeonRegionIndex(position);
                 const current = position.x === mapPosition.x && position.y === mapPosition.y;
-                const inVision = debugMode || isInPlayerVision(position, mapPosition, visionHorizontalRadius, visionVerticalRadius);
+                const inVision = debugMode || currentVisibleRoomKeys.has(roomKey);
                 const distance = chebyshevDistance(position, mapPosition);
                 const walkable = isWalkableRoom(roomType);
                 const adjacent = distance === 1 && walkable;
@@ -5970,7 +6339,7 @@ export default function Home() {
                 return (
                   <button
                     type="button"
-                    className={`map-room is-${roomState} ${current ? "is-current" : ""} ${inVision ? "is-in-vision" : "is-out-of-vision"} ${adjacent ? "is-adjacent" : ""} ${reachable ? "is-reachable" : ""}`}
+                    className={`map-room is-${roomState} ${dungeonRegionIndex === null ? "" : `is-region-${dungeonRegionIndex + 1}`} ${current ? "is-current" : ""} ${inVision ? "is-in-vision" : "is-out-of-vision"} ${adjacent ? "is-adjacent" : ""} ${reachable ? "is-reachable" : ""}`}
                     key={roomKey}
                     style={{
                       gridColumn: position.x - DUNGEON_MIN_X + MAP_WORLD_MARGIN_X + 1,
@@ -6028,7 +6397,7 @@ export default function Home() {
                   </button>
                 );
               })}
-              {mapBombs.map((bomb) => (
+              {mapBombs.filter((bomb) => renderedMapCellKeys.has(mapRoomKey(bomb.position))).map((bomb) => (
                 <span
                   className="map-bomb"
                   key={bomb.id}
@@ -6439,7 +6808,6 @@ export default function Home() {
               <section className="deck-editor-panel" onClick={(event) => event.stopPropagation()}>
               <header className="deck-editor-header">
                 <div>
-                  <p>LOADOUT</p>
                   <h2 id="deck-editor-title">덱 편집</h2>
                 </div>
                 {deckEditorErrorMessage && <p className="deck-editor-message" role="status">{deckEditorErrorMessage}</p>}
@@ -6448,7 +6816,6 @@ export default function Home() {
                     <button type="button" className={deckEditorSort === "cost" ? "is-active" : ""} onClick={() => setDeckEditorSort("cost")}>코스트 순</button>
                     <button type="button" className={deckEditorSort === "rarity" ? "is-active" : ""} onClick={() => setDeckEditorSort("rarity")}>희귀도 순</button>
                   </div>
-                  <strong>🪙 {gold}</strong>
                 </div>
               </header>
 
@@ -6483,7 +6850,7 @@ export default function Home() {
                       {deckEditorInventoryItemCount} / {inventoryCapacity}
                     </strong>
                   </div>
-                  <div className="deck-editor-card-list">
+                  <div className="deck-editor-card-list" onWheel={scrollDeckEditorCardsHorizontally}>
                     {inventoryConsumables.map((consumable) => (
                       <button
                         type="button"
@@ -6514,6 +6881,7 @@ export default function Home() {
                       <div
 className={`deck-editor-card is-pending-removal ${pendingRemovalBlinkDim ? "is-blink-dim" : ""} rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""} ${deckEditorDrag?.cardId === cardIds.at(-1) ? "is-dragging" : ""}`}
                         key={`pending-removal-inventory-${cardIds.join("-")}`}
+                        style={deckEditorCardStackStyle(cardIds.length)}
                         draggable
                         onDragStart={(event) => beginDeckEditorDrag(event, cardIds.at(-1)!, "pendingRemoval")}
                         onDragEnd={finishDeckEditorDrag}
@@ -6522,7 +6890,7 @@ className={`deck-editor-card is-pending-removal ${pendingRemovalBlinkDim ? "is-b
                         onMouseLeave={() => setHoveredDeckCard(null)}
                         aria-label={`${card.name} ${cardIds.length}장, 제거 예정`}
                       >
-                        <DeckEditorCardIcon card={card} count={cardIds.length} />
+                        <DeckEditorCardIcon card={card} count={cardIds.length} showNewBadge={cardIds.some((id) => transformedCardNewIds.has(id))} />
                         <span className="pending-removal-icon" aria-label="제거 예정">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h-2v-8h2Z" /></svg>
                         </span>
@@ -6533,6 +6901,7 @@ className={`deck-editor-card is-pending-removal ${pendingRemovalBlinkDim ? "is-b
                         type="button"
 className={`deck-editor-card rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""} ${deckEditorDrag?.cardId === cardIds.at(-1) ? "is-dragging" : ""}`}
                         key={`inventory-${cardIds.join("-")}`}
+                        style={deckEditorCardStackStyle(cardIds.length)}
                         draggable
                         onDragStart={(event) => beginDeckEditorDrag(event, cardIds.at(-1)!, "inventory")}
                         onDragEnd={finishDeckEditorDrag}
@@ -6555,7 +6924,7 @@ className={`deck-editor-card rarity-${card.rarity} ${card.enemyToken ? "rarity-e
                         }}
                         aria-label={`${card.name}, 좌클릭하면 선택한 덱으로 이동, 우클릭하면 바닥으로 이동`}
                       >
-                        <DeckEditorCardIcon card={card} count={cardIds.length} />
+                        <DeckEditorCardIcon card={card} count={cardIds.length} showNewBadge={cardIds.some((id) => transformedCardNewIds.has(id))} />
                       </button>
                     ))}
                     {Array.from(
@@ -6652,6 +7021,7 @@ className={`deck-editor-card rarity-${card.rarity} ${card.enemyToken ? "rarity-e
                         </button>
                         <div
                           className="deck-editor-deck-list"
+                          onWheel={scrollDeckEditorCardsHorizontally}
                           onDragOver={(event) => {
                             const drag = deckEditorDragRef.current ?? deckEditorDrag;
                             if (!drag || (drag.source === "deck" && drag.deckId === deck.id)) return;
@@ -6670,8 +7040,9 @@ className={`deck-editor-card rarity-${card.rarity} ${card.enemyToken ? "rarity-e
                             return (
                               <button
                                 type="button"
-className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""} ${isTemporary ? "is-temporary" : ""}`}
+className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""} ${isTemporary ? `is-temporary ${pendingRemovalBlinkDim ? "is-blink-dim" : ""}` : ""}`}
                                 key={`${deck.id}-${cardIds.join("-")}`}
+                                style={deckEditorCardStackStyle(cardIds.length)}
                                 draggable
                                 onDragStart={(event) => beginDeckEditorDrag(event, cardId, "deck", deck.id)}
                                 onDragEnd={finishDeckEditorDrag}
@@ -6706,7 +7077,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                                   moveDeckCardToInventory(cardId, deck.id);
                                 }}
                               >
-                                <DeckEditorCardIcon card={card} count={cardIds.length} isTemporary={isTemporary} />
+                                <DeckEditorCardIcon card={card} count={cardIds.length} showNewBadge={cardIds.some((id) => transformedCardNewIds.has(id))} />
                               </button>
                             );
                           })}
@@ -6731,6 +7102,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                 <div className="deck-editor-floor-layout">
                   <div
                     className={`deck-editor-floor-cards ${deckEditorDropTarget === "floor" ? "is-drop-target" : ""} ${deckCaseDrag?.source === "owned" ? "is-deck-drop-target" : ""}`}
+                    onWheel={scrollDeckEditorCardsHorizontally}
                     onDragOver={(event) => {
                       const deckDrag = deckCaseDragRef.current ?? deckCaseDrag;
                       if (deckDrag?.source === "owned") {
@@ -6812,6 +7184,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                       <div
                         className={`deck-editor-card is-pending-removal ${pendingRemovalBlinkDim ? "is-blink-dim" : ""} rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""} ${deckEditorDrag?.cardId === cardIds.at(-1) ? "is-dragging" : ""}`}
                         key={`pending-removal-${cardIds.join("-")}`}
+                        style={deckEditorCardStackStyle(cardIds.length)}
                         draggable
                         onDragStart={(event) => beginDeckEditorDrag(event, cardIds.at(-1)!, "pendingRemoval")}
                         onDragEnd={finishDeckEditorDrag}
@@ -6820,7 +7193,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                         onMouseLeave={() => setHoveredDeckCard(null)}
                         aria-label={`${card.name} ${cardIds.length}장, 제거 예정`}
                       >
-                        <DeckEditorCardIcon card={card} count={cardIds.length} />
+                        <DeckEditorCardIcon card={card} count={cardIds.length} showNewBadge={cardIds.some((id) => transformedCardNewIds.has(id))} />
                         <span className="pending-removal-icon" aria-label="제거 예정">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h-2v-8h2Z" /></svg>
                         </span>
@@ -6831,6 +7204,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                         type="button"
                         className={`deck-editor-card rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""} ${deckEditorDrag?.cardId === cardIds.at(-1) ? "is-dragging" : ""}`}
                         key={`floor-${cardIds.join("-")}`}
+                        style={deckEditorCardStackStyle(cardIds.length)}
                         draggable
                         onDragStart={(event) => beginDeckEditorDrag(event, cardIds.at(-1)!, "floor")}
                         onDragEnd={finishDeckEditorDrag}
@@ -6849,7 +7223,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                         }}
                         aria-label={`${card.name}, 인벤토리에 줍기`}
                       >
-                        <DeckEditorCardIcon card={card} count={cardIds.length} />
+                        <DeckEditorCardIcon card={card} count={cardIds.length} showNewBadge={cardIds.some((id) => transformedCardNewIds.has(id))} />
                       </button>
                     ))}
                   </div>
@@ -6858,13 +7232,12 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
 
               <footer className="deck-editor-footer">
                 <div className="deck-editor-footer-actions">
-                  <button type="button" className="cancel" onClick={cancelDeckEditor}>취소</button>
                   <button
                     type="button"
-                    className={`confirm ${deckEditorHasChanges ? "" : "is-hidden"}`}
+                    className="confirm"
                     onClick={confirmDeckEditor}
                     disabled={deckEditorInventoryItemCount > inventoryCapacity}
-                  >편집 확인</button>
+                  >확인</button>
                 </div>
               </footer>
               </section>
@@ -6948,6 +7321,20 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
     );
   }
 
+  const battleCardCollections = {
+    deck: deckCards,
+    piles: game.piles.flat(),
+    discard: game.discard,
+  };
+  const battleCardViewCards = battleCardView ? battleCardCollections[battleCardView] : [];
+  const battleCardViewGroups = Array.from(battleCardViewCards.reduce((groups, card) => {
+    const key = `${card.name}:${card.forged ? "forged" : "normal"}:${card.colored ? "colored" : "plain"}`;
+    const current = groups.get(key);
+    if (current) current.count += 1;
+    else groups.set(key, { card, count: 1 });
+    return groups;
+  }, new Map<string, { card: Card; count: number }>()).values());
+
   return (
     <main
       className={`game-shell card-style-simple watermark-${cardWatermarkStyle} ${constellationPreviewIndex === null ? "" : "is-previewing-constellation"}`}
@@ -6974,9 +7361,13 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
           "--battle-magic-color": battleThemeColors.magic,
         } as CSSProperties}
       >
-        {(game.pendingDraws > 0 || game.pendingPileDrawCount > 0 || game.pendingDiscards > 0) && (
+        {(game.pendingDraws > 0 || game.pendingPileDrawCount > 0 || game.pendingDiscards > 0 || game.pendingSweep) && (
           <div className="battle-choice-prompt" role="status" aria-live="assertive">
-            {game.pendingDiscards > 0 ? "버릴 카드를 정하세요" : "뽑을 카드를 정하세요"}
+            {game.pendingDiscards > 0
+              ? "버릴 카드를 정하세요"
+              : game.pendingSweep
+                ? game.pendingPileOperation === "discardTop" ? "버려질 카드를 선택하세요." : "효과를 적용할 파일을 선택하세요."
+                : "뽑을 카드를 정하세요"}
           </div>
         )}
         {debugMode && (
@@ -7114,6 +7505,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
             </div>
           </details>
         )}
+        {debugMode && <DebugEnemyCodex battle />}
         <header className="battle-topbar">
           <div className="turn-badge" aria-label={`현재 ${game.turn}턴`}>
             <span>TURN</span><strong>{game.turn}</strong>
@@ -7124,10 +7516,67 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
             </button>
           )}
         </header>
+        <nav className="battle-card-ledger" aria-label="전투 카드 현황">
+          <button type="button" className={battleCardView === "deck" ? "is-active" : ""} onClick={() => setBattleCardView((current) => current === "deck" ? null : "deck")}>
+            <strong>{activeDeck ? <DeckName deck={activeDeck} showEditions={false} /> : "현재 덱"}</strong><span>{deckCards.length}장</span>
+          </button>
+          <button type="button" className={battleCardView === "piles" ? "is-active" : ""} onClick={() => setBattleCardView((current) => current === "piles" ? null : "piles")}>
+            <strong>파일</strong><span>{game.piles.flat().length}장</span>
+          </button>
+          <button type="button" className={battleCardView === "discard" ? "is-active" : ""} onClick={() => setBattleCardView((current) => current === "discard" ? null : "discard")}>
+            <strong>버린 카드</strong><span>{game.discard.length}장</span>
+          </button>
+        </nav>
+        {battleCardView && (
+          <aside className="battle-card-ledger-panel" aria-live="polite">
+            <header>
+              <strong>{battleCardView === "deck" ? "현재 덱" : battleCardView === "piles" ? "파일에 존재하는 카드" : "버린 카드"}</strong>
+              <button type="button" onClick={() => setBattleCardView(null)}>닫기</button>
+            </header>
+            <div className="battle-card-ledger-cards">
+              {battleCardViewGroups.length > 0
+                ? battleCardViewGroups.map(({ card, count }) => (
+                  <div
+                    className={`battle-ledger-card-stack rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""}`}
+                    key={`${battleCardView}-${card.id}`}
+                    aria-label={`${card.name} ${count}장`}
+                    style={{ width: 74 + Math.min(5, count - 1) * 7 }}
+                  >
+                    {Array.from({ length: Math.min(5, count - 1) }, (_, layer) => (
+                      <span className="battle-ledger-stack-layer" key={`${card.id}-layer-${layer}`} style={{ left: layer * 7 }} />
+                    ))}
+                  <div
+                    className={`deck-editor-card battle-ledger-card rarity-${card.rarity} ${card.enemyToken ? "rarity-enemy-token" : ""} ${card.rarity === "legendary" ? "is-painted" : ""}`}
+                    style={{ marginLeft: Math.min(5, count - 1) * 7 }}
+                    onMouseEnter={(event) => moveDeckCardPreview(event, card)}
+                    onMouseMove={(event) => moveDeckCardPreview(event, card)}
+                    onMouseLeave={() => setHoveredDeckCard(null)}
+                  >
+                    <DeckEditorCardIcon card={card} count={count} />
+                  </div>
+                  </div>
+                ))
+                : <em>카드 없음</em>}
+            </div>
+          </aside>
+        )}
+        {hoveredDeckCard && (
+          <aside
+            className="deck-card-preview-floating battle-card-preview-floating"
+            style={{ left: deckPreviewPosition.x, top: deckPreviewPosition.y }}
+            aria-live="polite"
+          >
+            <div className={`card-face ${hoveredDeckCard.kind} ${hoveredDeckCard.damageType}`}>
+              <CardFace card={hoveredDeckCard} />
+            </div>
+          </aside>
+        )}
         <div className="enemy-zone">
           <div className={`enemies-row ${game.enemies.length > 2 ? "is-crowded" : ""}`}>
-            {game.enemies.filter((enemy) => enemy.hp > 0).map((enemy) => {
-              const defeated = enemy.hp === 0;
+            {game.enemies.filter((enemy) => enemy.hp > 0 || dyingEnemyIds.has(enemy.id)).map((enemy) => {
+              const dying = enemy.hp === 0 && dyingEnemyIds.has(enemy.id);
+              const defeated = enemy.hp === 0 && !dying;
+              const displayedEnemyHp = animatedEnemyHp[enemy.id] ?? enemy.hp;
               const intent = enemy.actions[enemy.intentIndex];
               const intentType = enemy.nextAttackMagic
                 ? "magic"
@@ -7135,14 +7584,15 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
               return (
                 <button
                   type="button"
-                  className={`enemy-unit ${enemy.variant} ${defeated ? "is-defeated" : ""} ${attackingEnemyId === enemy.id ? "is-attacking" : ""}`}
+                  className={`enemy-unit ${enemy.variant} ${dying ? "is-dying" : ""} ${defeated ? "is-defeated" : ""} ${attackingEnemyId === enemy.id ? "is-attacking" : ""}`}
                   data-enemy-id={enemy.id}
-                  data-drop-target={defeated ? undefined : `enemy:${enemy.id}`}
+                  data-drop-target={enemy.hp === 0 ? undefined : `enemy:${enemy.id}`}
                   key={enemy.id}
-                  disabled={defeated}
-                  aria-label={`${enemy.name}${defeated ? ", 격파됨" : ", 공격 대상"}`}
+                  disabled={enemy.hp === 0}
+                  onClick={() => playSelectedHandCardOnEnemy(enemy.id)}
+                  aria-label={`${enemy.name}${dying ? ", 쓰러지는 중" : defeated ? ", 격파됨" : ", 공격 대상"}`}
                 >
-                  {!defeated && <div className="drop-prompt attack-prompt">이 적을 공격</div>}
+                  {enemy.hp > 0 && <div className="drop-prompt attack-prompt">이 적을 공격</div>}
                   <div className="monster" aria-label={enemy.name}>
                     <div className={`intent intent-card ${defeated ? "is-defeated" : intentType}`}>
                       {defeated ? (
@@ -7154,6 +7604,8 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                           forceMagic={enemy.nextAttackMagic}
                           physicalResistance={game.playerPhysicalResistance}
                           magicResistance={game.playerMagicResistance}
+                          physicalVulnerability={game.playerPhysicalVulnerability}
+                          magicVulnerability={game.playerMagicVulnerability}
                         />
                       )}
                     </div>
@@ -7170,8 +7622,8 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                       )}
                       <div className="enemy-health-popup-anchor">
                         <div className="healthbar enemy-health">
-                          <i style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
-                          <span>{enemy.hp} / {enemy.maxHp}</span>
+                          <i style={{ width: `${(displayedEnemyHp / enemy.maxHp) * 100}%` }} />
+                          <span>{displayedEnemyHp} / {enemy.maxHp}</span>
                         </div>
                         {enemyPopups[enemy.id] && (
                           <div className={`combat-popup enemy-combat-popup is-${enemyPopups[enemy.id].kind ?? "damage"}`} key={enemyPopups[enemy.id].key}>
@@ -7197,9 +7649,13 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
           {pileClearNotice && <div className="pile-clear-notice">CLEAR!</div>}
           {(game.pendingSweep || game.pendingDraws > 0 || game.pendingPileDrawCount > 0) && (
             <div className="section-label">
-              <span>{game.pendingSweep ? "효과를 적용할 파일 선택" : "드로우할 파일 선택"}</span>
+              <span>{game.pendingSweep
+                ? game.pendingPileOperation === "discardTop" ? "버려질 카드를 선택하세요." : "효과를 적용할 파일 선택"
+                : "드로우할 파일 선택"}</span>
               <small>{game.pendingSweep
-                ? "원하는 파일을 클릭해 모든 카드를 손으로 가져오세요"
+                ? game.pendingPileOperation === "discardTop"
+                  ? "원하는 파일을 클릭해 맨 위 카드를 버리세요"
+                  : "원하는 파일을 클릭해 맨 위 카드를 맨 아래로 보내세요"
                 : "원하는 파일을 클릭해 맨 위 카드를 가져오세요"}</small>
             </div>
           )}
@@ -7215,6 +7671,23 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
             {game.piles.map((pile, index) => {
               const stackOffset = getStackOffset(pile.length);
               const discardCount = discardPileCounts.get(index) ?? 0;
+              const targetCard = pile.at(-1);
+              const activeDrag = dragging;
+              const isValidSolitaireDrop = activeDrag !== null
+                && game.stars >= 1
+                && !(activeDrag.source.type === "pile" && activeDrag.source.pileIndex === index)
+                && canPlaceBySolitaireRule(activeDrag.card, targetCard);
+              const isForgeDrop = activeDrag !== null
+                && isValidSolitaireDrop
+                && targetCard !== undefined
+                && !activeDrag.card.forged
+                && (
+                  activeDrag.card.effect === "exchange"
+                  || (activeDrag.card.forgeCost !== undefined && activeDrag.card.forgeCost === targetCard.cost)
+                  || activeDrag.card.forgeCosts?.includes(targetCard.cost)
+                  || (activeDrag.card.forgeAny === true)
+                  || (activeDrag.card.forgeTargetName !== undefined && activeDrag.card.forgeTargetName === targetCard.name)
+                );
               return (
                 <div
                   className={`solitaire-pile ${discardCount > 0 ? "is-discard-target" : ""} ${game.pendingDraws > 0 || game.pendingPileDrawCount > 0 || game.pendingSweep ? pile.length > 0 ? "is-draw-choice" : "is-draw-empty" : ""}`}
@@ -7225,9 +7698,13 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                   data-pile-index={index}
                   data-drop-target={`pile:${index}`}
                   aria-label={`${index + 1}번 파일, ${pile.length}장`}
-                  onClick={() => game.pendingSweep ? takeSelectedPile(index) : drawSelectedPile(index)}
+                  onClick={() => {
+                    if (game.pendingSweep) takeSelectedPile(index);
+                    else if (game.pendingDraws > 0 || game.pendingPileDrawCount > 0) drawSelectedPile(index);
+                    else moveSelectedHandCardToPile(index);
+                  }}
                 >
-                {pile.length === 0 && <div className="empty-slot" aria-hidden="true" />}
+                {pile.length === 0 && <div className={`empty-slot ${isValidSolitaireDrop ? isForgeDrop ? "is-forge-drop-target" : "is-solitaire-drop-target" : ""}`} aria-hidden="true" />}
                 {discardCount > 0 && <span className="discard-target-label">버리기 {discardCount}</span>}
                 {pile.map((card, cardIndex) => {
                   const isTop = cardIndex === pile.length - 1;
@@ -7237,7 +7714,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                     && cardIndex >= dragging.source.cardIndex;
                   return (
                     <div
-                      className={`stacked-card ${faceUp ? `card-face face-up pile-draggable-card ${card.kind} ${card.damageType}` : "face-down"} ${isMoving ? "is-dragging" : ""}`}
+                      className={`stacked-card ${faceUp ? `card-face face-up pile-draggable-card ${card.kind} ${card.damageType}` : "face-down"} ${isMoving ? "is-dragging" : ""} ${isTop && isValidSolitaireDrop ? isForgeDrop ? "is-forge-drop-target" : "is-solitaire-drop-target" : ""}`}
                       style={{
                         top: `${cardIndex * stackOffset}px`,
                         "--stack-index": cardIndex,
@@ -7288,14 +7765,6 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
               ) : Array.from({ length: game.stars }, (_, index) => <span key={index}>★</span>)}
             </div>
           </div>
-          {(game.playerPhysicalResistance > 0 || game.playerPhysicalVulnerability > 0 || game.playerMagicResistance > 0 || game.playerMagicVulnerability > 0) && (
-            <div className="defense-shields center-defense-shields" aria-label="현재 방어도">
-              {game.playerPhysicalResistance > 0 && <span className="combat-buff resistance physical">물리 저항 {game.playerPhysicalResistance}</span>}
-              {game.playerPhysicalVulnerability > 0 && <span className="combat-buff vulnerability physical">물리 취약 {game.playerPhysicalVulnerability}</span>}
-              {game.playerMagicResistance > 0 && <span className="combat-buff resistance magic">마법 저항 {game.playerMagicResistance}</span>}
-              {game.playerMagicVulnerability > 0 && <span className="combat-buff vulnerability magic">마법 취약 {game.playerMagicVulnerability}</span>}
-            </div>
-          )}
           <div className="drop-prompt defend-prompt">
             {dragging?.card.effect === "ironRampage"
                 ? "여기에 놓아 전체 공격"
@@ -7340,16 +7809,16 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                   )}
                 </div>
                 <div className="combat-buffs" aria-label="현재 강화 효과">
-                  {game.strength + combatManualBonus > 0 && <span>힘 {game.strength + combatManualBonus}</span>}
-                  {game.agility + combatManualBonus > 0 && <span>강인함 {game.agility + combatManualBonus}</span>}
-                  {game.defenseMultiplier > 1 && <span>방어 ×{game.defenseMultiplier}</span>}
-                  {game.damageTakenMultiplier > 1 && <span>받는 피해 ×{game.damageTakenMultiplier}</span>}
-                  {game.invulnerable && <span>피해 면역</span>}
-                  {game.doubleNextAttack && <span>다음 공격 2회</span>}
-                  {game.playerPhysicalResistance > 0 && <span>물리 저항 {game.playerPhysicalResistance}</span>}
-                  {game.playerPhysicalVulnerability > 0 && <span>물리 취약 {game.playerPhysicalVulnerability}</span>}
-                  {game.playerMagicResistance > 0 && <span>마법 저항 {game.playerMagicResistance}</span>}
-                  {game.playerMagicVulnerability > 0 && <span>마법 취약 {game.playerMagicVulnerability}</span>}
+                  {game.strength + combatManualBonus > 0 && <span className="is-buff">힘 {game.strength + combatManualBonus}</span>}
+                  {game.agility + combatManualBonus > 0 && <span className="is-buff">강인함 {game.agility + combatManualBonus}</span>}
+                  {game.defenseMultiplier > 1 && <span className="is-buff">방어 ×{game.defenseMultiplier}</span>}
+                  {game.damageTakenMultiplier > 1 && <span className="is-debuff">받는 피해 ×{game.damageTakenMultiplier}</span>}
+                  {game.invulnerable && <span className="is-buff">피해 면역</span>}
+                  {game.doubleNextAttack && <span className="is-buff">다음 공격 2회</span>}
+                  {game.playerPhysicalResistance > 0 && <span className="is-buff">물리 저항 {game.playerPhysicalResistance}</span>}
+                  {game.playerPhysicalVulnerability > 0 && <span className="is-debuff">물리 취약 {game.playerPhysicalVulnerability}</span>}
+                  {game.playerMagicResistance > 0 && <span className="is-buff">마법 저항 {game.playerMagicResistance}</span>}
+                  {game.playerMagicVulnerability > 0 && <span className="is-debuff">마법 취약 {game.playerMagicVulnerability}</span>}
                 </div>
               </div>
             </div>
@@ -7362,7 +7831,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
           >
             {displayedHand.map((card, index) => card ? (
                 <button
-                className={`game-card card-face ${card.kind} ${card.damageType} ${HAND_PASSIVE_EFFECTS.has(card.effect) ? "has-hand-aura" : card.effect === "slime" ? "has-danger-aura is-toxic-slime" : ""} ${dragging?.card.id === card.id ? "is-dragging" : ""}`}
+                className={`game-card card-face ${card.kind} ${card.damageType} ${HAND_PASSIVE_EFFECTS.has(card.effect) ? "has-hand-aura" : card.effect === "slime" ? "has-danger-aura is-toxic-slime" : ""} ${dragging?.card.id === card.id ? "is-dragging" : ""} ${selectedHandCardId === card.id ? "is-keyboard-selected" : ""}`}
                 key={card.id}
                 ref={(element) => {
                   if (element) handCardRefs.current.set(card.id, element);
@@ -7372,7 +7841,10 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                   "--card-index": index,
                   ...handFanStyle(index),
                 } as CSSProperties}
-                onPointerDown={(event) => beginDrag(event, card, { type: "hand" })}
+                onPointerDown={(event) => {
+                  setSelectedHandCardId(null);
+                  beginDrag(event, card, { type: "hand" });
+                }}
                 onPointerMove={moveDrag}
                 onPointerUp={finishDrag}
                 onPointerCancel={cancelDrag}

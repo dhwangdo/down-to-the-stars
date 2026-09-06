@@ -21,7 +21,7 @@ export type MapEnemyCellMemory = Record<string, {
 
 export const MAP_ENEMY_ACTIVE_RADIUS = 4;
 export const MAP_PLAYER_VISION_HORIZONTAL_RADIUS = 2;
-export const MAP_PLAYER_VISION_VERTICAL_RADIUS = 1;
+export const MAP_PLAYER_VISION_VERTICAL_RADIUS = 2;
 export const MAP_ENEMY_SPAWN_CHANCE = 0.08;
 
 export const EIGHT_DIRECTIONS: GridPosition[] = [

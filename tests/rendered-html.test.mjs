@@ -20,7 +20,8 @@ test("server-renders the exploration map", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>/);
-  assert.match(html, /<h1>\uD558\uC218\uAD6C<\/h1>/);
+  assert.match(html, /class="topbar map-topbar"/);
+  assert.doesNotMatch(html, />\uD558\uC218\uAD6C<|>\uC774\uB984 \uBBF8\uC815 \uC9C0\uC5ED</);
   assert.doesNotMatch(html, /THE DESCENT/);
   assert.match(html, /class="map-viewport"/);
   assert.match(html, /class="map-room /);

@@ -16,3 +16,10 @@ export function addVulnerability(status: OpposingStatus, amount: number): Opposi
 export function vulnerabilityMultiplier(vulnerability: number) {
   return vulnerability > 0 ? 2 : 1;
 }
+
+export function decayThenAddVulnerability(status: OpposingStatus, amount: number): OpposingStatus {
+  return addVulnerability({
+    resistance: Math.max(0, status.resistance - 1),
+    vulnerability: Math.max(0, status.vulnerability - 1),
+  }, amount);
+}

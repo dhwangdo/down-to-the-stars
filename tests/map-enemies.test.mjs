@@ -21,13 +21,13 @@ test("Chebyshev distance uses the larger axis difference", () => {
   assert.equal(chebyshevDistance({ x: 0, y: 0 }, { x: 3, y: -2 }), 3);
 });
 
-test("player vision has a 5 by 3 rectangle with 15 cells", () => {
+test("player vision has a 5 by 5 square with 25 cells", () => {
   const center = { x: 0, y: 0 };
-  const visible = Array.from({ length: 3 }, (_, y) => y - 1).flatMap((y) =>
+  const visible = Array.from({ length: 5 }, (_, y) => y - 2).flatMap((y) =>
     Array.from({ length: 5 }, (_, x) => x - 2).filter((x) =>
       isInPlayerVision({ x, y }, center)));
-  assert.equal(visible.length, 15);
-  assert.equal(isInPlayerVision({ x: 0, y: 2 }, center), false);
+  assert.equal(visible.length, 25);
+  assert.equal(isInPlayerVision({ x: 0, y: 3 }, center), false);
   assert.equal(isInPlayerVision({ x: 1, y: 1 }, center), true);
   assert.equal(isInPlayerVision({ x: 2, y: 1 }, center), true);
 });

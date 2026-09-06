@@ -11,7 +11,7 @@
     "build:pages": "next build",
     "start": "vinext start",
     "test": "npm run build && npm run test:enemies && node --test tests/rendered-html.test.mjs",
-    "test:enemies": "node --experimental-strip-types --test tests/card-rules.test.mjs tests/enemies.test.mjs tests/map-enemies.test.mjs tests/map-effects.test.mjs",
+    "test:enemies": "node --experimental-strip-types --test tests/card-rules.test.mjs tests/enemies.test.mjs tests/map-enemies.test.mjs tests/map-effects.test.mjs tests/statuses.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
