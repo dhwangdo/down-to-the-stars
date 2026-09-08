@@ -1483,6 +1483,7 @@ const LEGENDARY_CARD_POOL: CardBlueprint[] = [
 // 디버그 덱은 현재 사용 카드와 호환용 카드까지 모두 확인할 수 있게 한다.
 const DEBUG_ALL_CARD_BLUEPRINTS: CardBlueprint[] = [
   ...BASIC_CARD_POOL,
+  { ...BASIC_CARD_POOL[1], name: "마법 방어", damageType: "magic" },
   ...LEGACY_SPECIAL_CARD_POOL,
   ...LEGACY_RARE_CARD_POOL,
   ...SPECIAL_CARD_POOL,
