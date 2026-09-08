@@ -55,7 +55,7 @@ import { addResistance, addVulnerability, decayThenAddVulnerability, vulnerabili
 
 type CardKind = "strike" | "defend" | "skill";
 type DamageType = "physical" | "magic";
-type CardRarity = "basic" | "special" | "rare" | "legendary";
+type CardRarity = "starter" | "basic" | "special" | "rare" | "legendary";
 type SolitaireRule = "top" | "bottom" | "spell";
 type CardEffect =
   | "strike"
@@ -67,6 +67,7 @@ type CardEffect =
   | "prepare"
   | "sweep"
   | "drawEachPile"
+  | "dash"
   | "focus"
   | "adrenaline"
   | "rulerCompass"
@@ -156,7 +157,6 @@ type ConsumableType =
   | "extractTicket"
   | "transformTicket"
   | "mapTicket"
-  | "legendaryTicket"
   | "cardPack";
 const CONSUMABLE_TYPES: ConsumableType[] = [
   "paintTicket",
@@ -166,13 +166,12 @@ const CONSUMABLE_TYPES: ConsumableType[] = [
   "transformTicket",
   "mapTicket",
   "cloneTicket",
-  "legendaryTicket",
 ];
 
 function consumableTypeFromRoll(roll: number) {
   const weightedTypes = CONSUMABLE_TYPES.map((type) => ({
     type,
-    weight: type === "cloneTicket" ? .25 : type === "legendaryTicket" ? .1 : 1,
+    weight: type === "cloneTicket" ? .25 : 1,
   }));
   const totalWeight = weightedTypes.reduce((sum, item) => sum + item.weight, 0);
   let cursor = Math.max(0, Math.min(.999999999, roll)) * totalWeight;
@@ -1406,6 +1405,10 @@ function getRegionNumber(position: MapPosition) {
   return (safeRegion ?? 0) + 1;
 }
 
+function isHigherRegionMapEnemy(encounterIndex: number, position: MapPosition) {
+  return getEncounterRegionNumber(encounterIndex) > getRegionNumber(position);
+}
+
 const DEFENSE_LABEL: Record<DamageType, string> = {
   physical: "방어",
   magic: "마법 방어",
@@ -1413,20 +1416,32 @@ const DEFENSE_LABEL: Record<DamageType, string> = {
 
 type CardBlueprint = Omit<Card, "id" | "revealed">;
 
+const STARTER_CARD_POOL: CardBlueprint[] = [
+  { kind: "strike", effect: "strike", rarity: "starter", name: "타격", cost: 1, value: 6, draw: 0, damageType: "physical" },
+  { kind: "defend", effect: "defend", rarity: "starter", name: "방어", cost: 1, value: 5, draw: 0, damageType: "physical" },
+  { kind: "defend", effect: "defend", rarity: "starter", name: "마법 방어", cost: 1, value: 5, draw: 0, damageType: "magic" },
+];
+
 const BASIC_CARD_POOL: CardBlueprint[] = [
-  { kind: "strike", effect: "strike", rarity: "basic", name: "타격", cost: 1, value: 6, draw: 0, damageType: "physical" },
-  { kind: "defend", effect: "defend", rarity: "basic", name: "방어", cost: 1, value: 5, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "strike", rarity: "basic", name: "잽", cost: 0, value: 6, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "rulerCompass", rarity: "basic", name: "자와 컴퍼스", cost: 1, value: 9, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "strike", rarity: "basic", name: "기회 포착", cost: 1, value: 6, draw: 1, damageType: "physical" },
+  { kind: "skill", effect: "deflect", rarity: "basic", name: "기회 창출", cost: 1, value: 5, draw: 1, damageType: "physical" },
+  { kind: "skill", effect: "sweep", rarity: "basic", name: "휩쓸기", cost: 1, value: 9, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "boomerang", rarity: "basic", name: "정리 타격", cost: 1, value: 9, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "waterWave", rarity: "basic", name: "물의 파동", cost: 1, value: 5, draw: 0, damageType: "magic" },
+  { kind: "skill", effect: "starGuard", rarity: "basic", name: "별의 장막", cost: 2, value: 12, draw: 0, damageType: "physical" },
 ];
 
 const LEGACY_SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "defend", effect: "deflect", rarity: "special", name: "흘려보내기", cost: 1, value: 5, draw: 1, damageType: "physical" },
   { kind: "skill", effect: "prepare", rarity: "special", name: "예비", cost: 0, value: 0, draw: 1, damageType: "physical" },
   { kind: "skill", effect: "drawEachPile", rarity: "special", name: "걷어내기", cost: 1, value: 0, draw: 0, damageType: "physical" },
-  { kind: "strike", effect: "rulerCompass", rarity: "special", name: "자와 컴퍼스", cost: 1, value: 6, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "rulerCompass", rarity: "basic", name: "자와 컴퍼스", cost: 1, value: 6, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "berserk", rarity: "special", name: "광폭화", cost: 0, value: 0, draw: 0, damageType: "physical" },
-  { kind: "defend", effect: "iceShield", rarity: "special", name: "얼음 방패", cost: 1, value: 8, draw: 0, damageType: "magic" },
+  { kind: "defend", effect: "iceShield", rarity: "special", name: "얼음 방패", cost: 1, value: 11, draw: 0, damageType: "magic" },
   { kind: "strike", effect: "ironWave", rarity: "special", name: "철의 파동", cost: 1, value: 5, draw: 0, damageType: "physical" },
-  { kind: "strike", effect: "waterWave", rarity: "special", name: "물의 파동", cost: 1, value: 5, draw: 0, damageType: "magic" },
+  { kind: "strike", effect: "waterWave", rarity: "basic", name: "물의 파동", cost: 1, value: 5, draw: 0, damageType: "magic" },
   { kind: "strike", effect: "ironRampage", rarity: "special", name: "무쇠 난동", cost: 2, value: 8, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "strike", rarity: "special", name: "몽둥이질", cost: 3, value: 30, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "focus", rarity: "special", name: "집중", cost: 0, value: 0, draw: 0, damageType: "physical" },
@@ -1439,21 +1454,16 @@ const LEGACY_RARE_CARD_POOL: CardBlueprint[] = [
 // 위의 LEGACY 목록은 이전 실행 중인 브라우저 상태를 안전하게 읽기 위한
 // 호환용 데이터이며, 보상·상점·새 덱에는 더 이상 쓰지 않습니다.
 const SPECIAL_CARD_POOL: CardBlueprint[] = [
-  { kind: "strike", effect: "strike", rarity: "special", name: "잽", cost: 0, value: 6, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "warmUp", rarity: "special", name: "준비 운동", cost: 0, value: 4, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "starlight", rarity: "special", name: "별빛", cost: 0, value: 2, draw: 0, damageType: "physical" },
-  { kind: "skill", effect: "sweep", rarity: "special", name: "휩쓸기", cost: 1, value: 7, draw: 0, damageType: "physical" },
-  { kind: "strike", effect: "strike", rarity: "special", name: "기회 포착", cost: 1, value: 6, draw: 1, damageType: "physical" },
-  { kind: "skill", effect: "deflect", rarity: "special", name: "기회 창출", cost: 1, value: 5, draw: 1, damageType: "physical" },
-  { kind: "strike", effect: "rulerCompass", rarity: "special", name: "자와 컴퍼스", cost: 1, value: 9, draw: 0, damageType: "physical" },
+  { kind: "defend", effect: "iceShield", rarity: "special", name: "얼음 방패", cost: 1, value: 11, draw: 0, damageType: "magic" },
   { kind: "strike", effect: "fourHit", rarity: "special", name: "4연격", cost: 1, value: 2, draw: 0, damageType: "physical" },
-  { kind: "strike", effect: "boomerang", rarity: "special", name: "정리 타격", cost: 1, value: 9, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "battlePlan", rarity: "special", name: "전략가", cost: 1, value: 2, draw: 1, damageType: "physical" },
   { kind: "skill", effect: "plateArmor", rarity: "special", name: "판금 갑옷", cost: 1, value: 9, draw: 0, damageType: "physical", forgeCost: 2 },
   { kind: "skill", effect: "weaponSharpen", rarity: "special", name: "무기 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "armorSharpen", rarity: "special", name: "방어구 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "strike", effect: "meteor", rarity: "special", name: "유성우", cost: 2, value: 7, draw: 0, damageType: "physical" },
-  { kind: "skill", effect: "starGuard", rarity: "special", name: "별의 장막", cost: 2, value: 12, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "dash", rarity: "special", name: "질주", cost: 1, value: 3, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "counter", rarity: "special", name: "응수", cost: 0, value: 0, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "strike", rarity: "special", name: "묵직한 한 방", cost: 3, value: 30, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "exchange", rarity: "special", name: "치환 합금", cost: 3, value: 15, draw: 0, damageType: "physical", forgeAny: true },
@@ -1482,8 +1492,8 @@ const LEGENDARY_CARD_POOL: CardBlueprint[] = [
 
 // 디버그 덱은 현재 사용 카드와 호환용 카드까지 모두 확인할 수 있게 한다.
 const DEBUG_ALL_CARD_BLUEPRINTS: CardBlueprint[] = [
+  ...STARTER_CARD_POOL,
   ...BASIC_CARD_POOL,
-  { ...BASIC_CARD_POOL[1], name: "마법 방어", damageType: "magic" },
   ...LEGACY_SPECIAL_CARD_POOL,
   ...LEGACY_RARE_CARD_POOL,
   ...SPECIAL_CARD_POOL,
@@ -1492,7 +1502,13 @@ const DEBUG_ALL_CARD_BLUEPRINTS: CardBlueprint[] = [
 ];
 
 function createBattleRewardCard(id: number, rareChance: number): Card {
-  const pool = Math.random() < rareChance ? RARE_CARD_POOL : SPECIAL_CARD_POOL;
+  const roll = Math.random();
+  if (roll < rareChance) {
+    const selected = RARE_CARD_POOL[Math.floor(Math.random() * RARE_CARD_POOL.length)];
+    return { ...selected, id, revealed: false };
+  }
+  const nonRareRoll = Math.random();
+  const pool = nonRareRoll < 0.3 / 0.95 ? BASIC_CARD_POOL : SPECIAL_CARD_POOL;
   const selected = pool[Math.floor(Math.random() * pool.length)];
   return { ...selected, id, revealed: false };
 }
@@ -1504,14 +1520,15 @@ function createDeck(): Card[] {
   ) => Array.from({ length: count }, () => ({ ...blueprint }));
   const starterSpecialNames = ["전투 교본", "자와 컴퍼스", "기회 창출", "별의 장막"];
   const starterSpecialCards = starterSpecialNames.map((name) => {
-    const blueprint = SPECIAL_CARD_POOL.find((card) => card.name === name);
+    const blueprint = SPECIAL_CARD_POOL.find((card) => card.name === name)
+      ?? BASIC_CARD_POOL.find((card) => card.name === name);
     if (!blueprint) throw new Error(`Missing starting card: ${name}`);
     return blueprint;
   });
   const blueprints: CardBlueprint[] = [
-    ...make(6, BASIC_CARD_POOL[0]),
-    ...make(4, BASIC_CARD_POOL[1]),
-    ...make(2, { ...BASIC_CARD_POOL[1], name: "마법 방어", damageType: "magic" }),
+    ...make(6, STARTER_CARD_POOL[0]),
+    ...make(4, STARTER_CARD_POOL[1]),
+    ...make(2, STARTER_CARD_POOL[2]),
     ...starterSpecialCards,
   ];
   if (blueprints.length !== STARTING_DECK_SIZE) {
@@ -1687,8 +1704,9 @@ function createRandomDeck(regionNumber: number, startId: number, editionBonus = 
   for (let slot = 0; slot < capacity; slot += 1) {
     const roll = Math.random();
     let pool: CardBlueprint[] | null = null;
-    if (roll < 0.4) pool = null;
-    else if (roll < 0.6) pool = BASIC_CARD_POOL;
+    if (roll < 0.35) pool = null;
+    else if (roll < 0.5) pool = STARTER_CARD_POOL;
+    else if (roll < 0.7) pool = BASIC_CARD_POOL;
     else if (roll < 0.98) pool = SPECIAL_CARD_POOL;
     else pool = RARE_CARD_POOL;
     if (!pool) continue;
@@ -1739,9 +1757,6 @@ function createConsumable(type: ConsumableType, id: string): Consumable {
   }
   if (type === "mapTicket") {
     return { id, type, name: "지도 티켓", description: "같은 지역에서 가장 가까운 성소나 모닥불을 밝힙니다." };
-  }
-  if (type === "legendaryTicket") {
-    return { id, type, name: "전설 티켓", description: "무작위 전설 카드 1장을 얻습니다." };
   }
   if (type === "cardPack") {
     return { id, type, name: "카드 팩", description: "특별·희귀 카드 5장이 들어 있습니다." };
@@ -1855,6 +1870,23 @@ function drawOneFromPiles(piles: Card[][]) {
   if (!card) return { piles: nextPiles, hand: [] as Card[] };
   if (pile.length > 0) pile[pile.length - 1] = { ...pile[pile.length - 1], revealed: true };
   return { piles: nextPiles, hand: [{ ...card, revealed: true }] };
+}
+
+function drawRandomFromPiles(piles: Card[][], count: number) {
+  const nextPiles = piles.map((pile) => [...pile]);
+  const hand: Card[] = [];
+  for (let draw = 0; draw < count; draw += 1) {
+    const availableIndexes = nextPiles
+      .map((pile, index) => pile.length > 0 ? index : -1)
+      .filter((index) => index >= 0);
+    if (availableIndexes.length === 0) break;
+    const pileIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+    const pile = nextPiles[pileIndex];
+    const card = pile.pop();
+    if (card) hand.push({ ...card, revealed: true });
+    if (pile.length > 0) pile[pile.length - 1] = { ...pile[pile.length - 1], revealed: true };
+  }
+  return { piles: nextPiles, hand };
 }
 
 function waitingState(
@@ -2154,6 +2186,8 @@ function CardFace({
         return <span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span>;
       case "drawEachPile":
         return <span>모든 파일에서 카드를 1장씩 뽑습니다.</span>;
+      case "dash":
+        return <span>무작위 파일에서 카드를 1장씩 3번 뽑습니다.</span>;
       case "rulerCompass":
         return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-star">★</span>을 얻습니다.</span></>;
       case "berserk":
@@ -2163,7 +2197,7 @@ function CardFace({
       case "rapidFire":
         return <span>다음 공격 카드가 한 번 더 발동합니다.</span>;
       case "iceShield":
-        return <><span><span className="effect-type magic">마법 방어</span>를 {defenseNumber} 얻습니다.</span><span>{starIcons(1)}을 얻습니다.</span></>;
+        return <span><span className="effect-type magic">마법 방어</span>를 {defenseNumber} 얻습니다.</span>;
       case "magicStrike":
         return <span>체력이 가장 낮은 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span>;
       case "shockwave":
@@ -2187,7 +2221,7 @@ function CardFace({
       case "fileDraw":
         return <span>{card.forged ? "모든 파일에서 카드를 1장씩 뽑습니다." : "파일 하나를 선택해 위에서부터 카드를 3장 뽑습니다."}</span>;
       case "starGuard":
-        return <><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span><span className="effect-star">★★</span>를 얻습니다.</span></>;
+        return <><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span><span className="effect-star">★</span>를 얻습니다.</span></>;
       case "charge":
         return <span><strong className="effect-keyword">에너지</strong>를 {card.value} 얻습니다.</span>;
       case "weaponSharpen":
@@ -2525,7 +2559,7 @@ export default function Home() {
   const [transformedCardNewIds, setTransformedCardNewIds] = useState<Set<number>>(() => new Set());
   const [hoveredDeckCard, setHoveredDeckCard] = useState<Card | null>(null);
   const [hoveredConsumable, setHoveredConsumable] = useState<Consumable | null>(null);
-  const [deckEditorSort, setDeckEditorSort] = useState<"cost" | "rarity">("cost");
+  const [deckEditorSort, setDeckEditorSort] = useState<"cost" | "rarity">("rarity");
   const [deckPreviewPosition, setDeckPreviewPosition] = useState({ x: 0, y: 0 });
   const [game, setGame] = useState<GameState>(waitingState);
   const [phase, setPhase] = useState<Phase>("drawing");
@@ -2542,7 +2576,7 @@ export default function Home() {
   const nextConsumableIdRef = useRef(1);
   const deckSelectorCloseTimerRef = useRef<number | null>(null);
   const deckPreviewReleaseTimerRef = useRef<number | null>(null);
-  const deckPreviewSuppressedRef = useRef(false);
+  const [deckPreviewSuppressed, setDeckPreviewSuppressed] = useState(false);
   const deckDropChanceRef = useRef(0.25);
   const rareCardDropChanceRef = useRef(0.05);
   const activeDeck = ownedDecks.find((deck) => deck.id === activeDeckId) ?? ownedDecks[0];
@@ -2696,6 +2730,7 @@ export default function Home() {
 
     const [, rarity, rawIndex] = debugSpawnSelection.split(":");
     let blueprint: CardBlueprint | undefined;
+    if (rarity === "starter") blueprint = STARTER_CARD_POOL[Number(rawIndex)];
     if (rarity === "basic") blueprint = BASIC_CARD_POOL[Number(rawIndex)];
     if (rarity === "special") blueprint = SPECIAL_CARD_POOL[Number(rawIndex)];
     if (rarity === "rare") blueprint = RARE_CARD_POOL[Number(rawIndex)];
@@ -3655,7 +3690,7 @@ export default function Home() {
     clientX: number,
     clientY: number,
   ) => {
-    if (deckPreviewSuppressedRef.current) return;
+    if (deckPreviewSuppressed) return;
     const margin = 12;
     const offset = 18;
     const previewWidth = 104;
@@ -4067,13 +4102,6 @@ export default function Home() {
       setDeckEditorMessage(`가장 가까운 ${effectiveRoomType(nearest) === "shrine" ? "성소" : "모닥불"}의 위치를 밝혔습니다.`);
       return;
     }
-    if (consumable.type === "legendaryTicket") {
-      const blueprint = randomItem(LEGENDARY_CARD_POOL);
-      const card = { ...blueprint, id: nextCardIdRef.current++, revealed: false };
-      setInventoryConsumables((current) => current.filter((item) => item.id !== consumable.id));
-      setInventoryCards((current) => [...current, card]);
-      setDeckEditorMessage(`전설 카드 ${card.name}을(를) 얻었습니다.`);
-    }
   };
 
   const pickUpFloorDeck = (deckId: string) => {
@@ -4167,7 +4195,7 @@ export default function Home() {
   ) => {
     if (deckPreviewReleaseTimerRef.current !== null) window.clearTimeout(deckPreviewReleaseTimerRef.current);
     deckPreviewReleaseTimerRef.current = null;
-    deckPreviewSuppressedRef.current = true;
+    setDeckPreviewSuppressed(true);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", `${source}:${cardId}:${deckId ?? ""}`);
     deckEditorDragRef.current = { cardId, source, deckId };
@@ -4197,7 +4225,9 @@ export default function Home() {
 
   const transformedCard = (card: Card) => {
     if (card.rarity === "legendary") return null;
-    const pool = card.rarity === "basic" ? BASIC_CARD_POOL : card.rarity === "special" ? SPECIAL_CARD_POOL : RARE_CARD_POOL;
+    const pool = card.rarity === "starter"
+      ? STARTER_CARD_POOL
+      : card.rarity === "basic" ? BASIC_CARD_POOL : card.rarity === "special" ? SPECIAL_CARD_POOL : RARE_CARD_POOL;
     const candidates = pool.filter((blueprint) => blueprint.name !== card.name);
     if (candidates.length === 0) return null;
     const blueprint = randomItem(candidates);
@@ -4319,7 +4349,7 @@ export default function Home() {
     deckEditorDragRef.current = null;
     setDeckEditorDrag(null);
     setDeckEditorDropTarget(null);
-    deckPreviewSuppressedRef.current = false;
+    setDeckPreviewSuppressed(false);
   };
 
   const finishDeckEditorDrag = () => {
@@ -4329,7 +4359,7 @@ export default function Home() {
     setHoveredDeckCard(null);
     if (deckPreviewReleaseTimerRef.current !== null) window.clearTimeout(deckPreviewReleaseTimerRef.current);
     deckPreviewReleaseTimerRef.current = window.setTimeout(() => {
-      deckPreviewSuppressedRef.current = false;
+      setDeckPreviewSuppressed(false);
       deckPreviewReleaseTimerRef.current = null;
     }, 140);
   };
@@ -4933,6 +4963,9 @@ export default function Home() {
       const pommelDrawResult = card.effect === "pommel"
         ? drawFromFirstPile(current.piles)
         : null;
+      const randomPileDrawResult = card.effect === "dash"
+        ? drawRandomFromPiles(current.piles, 3)
+        : null;
       const pendingPileDrawCount = card.effect === "fileDraw" && !card.forged && canDraw
         ? card.draw
         : 0;
@@ -4964,6 +4997,7 @@ export default function Home() {
         if (card.effect === "adrenaline") return `에너지를 1 얻습니다 · 카드 ${card.draw}장 드로우`;
         if (card.effect === "sweep") return canDraw ? "가져올 파일을 선택하세요." : "가져올 카드가 없습니다.";
         if (card.effect === "drawEachPile") return `모든 파일에서 ${drawEachPileResult?.hand.length ?? 0}장 뽑음`;
+        if (card.effect === "dash") return `질주: 무작위 파일에서 ${randomPileDrawResult?.hand.length ?? 0}장 뽑음`;
         if (card.effect === "berserk") return "에너지를 2 얻습니다 · 물리 취약 2 획득";
         if (card.effect === "transcend") return "이번 턴 피해 면역 · 힘 5 획득";
         if (card.effect === "rapidFire") return "다음 공격 카드가 2회 발동";
@@ -4988,7 +5022,7 @@ export default function Home() {
         : "";
       return {
         ...current,
-        hand: [...remainingHand, ...(drawEachPileResult?.hand ?? pommelDrawResult?.hand ?? [])],
+        hand: [...remainingHand, ...(drawEachPileResult?.hand ?? pommelDrawResult?.hand ?? randomPileDrawResult?.hand ?? [])],
         // 강화는 사용 후에도 다음 셔플 전까지 유지된다. 셔플 때 prepareDeckForPiles가 해제한다.
         discard: card.exhaust
           ? current.discard
@@ -5005,9 +5039,7 @@ export default function Home() {
               : card.effect === "starlight"
                 ? card.value
               : card.effect === "starGuard"
-                ? 2
-                : card.effect === "iceShield"
-                  ? 1
+                ? 1
                 : card.effect === "superStrategist"
                   ? card.value
                   : card.effect === "aries"
@@ -5031,7 +5063,9 @@ export default function Home() {
         strength: current.strength + (card.effect === "orion" ? 10 : card.effect === "warmUp" ? card.value + 1 : card.effect === "augment" || card.effect === "weaponSharpen" ? card.value : 0),
         temporaryStrength: current.temporaryStrength + (card.effect === "warmUp" ? card.value : 0),
         agility: current.agility + (card.effect === "augment" || card.effect === "armorSharpen" ? card.value : 0),
-        piles: card.effect === "pioneer" ? [...(drawEachPileResult?.piles ?? pommelDrawResult?.piles ?? current.piles), []] : (drawEachPileResult?.piles ?? pommelDrawResult?.piles ?? current.piles),
+        piles: card.effect === "pioneer"
+          ? [...(drawEachPileResult?.piles ?? pommelDrawResult?.piles ?? randomPileDrawResult?.piles ?? current.piles), []]
+          : (drawEachPileResult?.piles ?? pommelDrawResult?.piles ?? randomPileDrawResult?.piles ?? current.piles),
         reflectDamage: card.effect === "counter" ? 1 : current.reflectDamage,
         defenseMultiplier: current.defenseMultiplier,
         damageTakenMultiplier: current.damageTakenMultiplier,
@@ -5994,7 +6028,7 @@ export default function Home() {
     const currentFloorCards = roomDrops[currentRoomKey] ?? [];
     const currentFloorConsumables = roomConsumableDrops[currentRoomKey] ?? [];
     const currentFloorDecks = roomDeckDrops[currentRoomKey] ?? [];
-    const rarityOrder: Record<CardRarity, number> = { basic: 0, special: 1, rare: 2, legendary: 3 };
+    const rarityOrder: Record<CardRarity, number> = { starter: 0, basic: 1, special: 2, rare: 3, legendary: 4 };
     const cardSortCost = (card: Card) => UNPLAYABLE_CARD_EFFECTS.has(card.effect)
       ? -1
       : card.effect === "ironWall" ? IRON_WALL_COST : card.cost;
@@ -6235,7 +6269,14 @@ export default function Home() {
                   value={debugSpawnSelection}
                   onChange={(event) => setDebugSpawnSelection(event.target.value)}
                 >
-                  <optgroup label="기본 카드">
+                  <optgroup label="시작 카드">
+                    {STARTER_CARD_POOL.map((card, index) => (
+                      <option key={`starter-${card.effect}-${index}`} value={`card:starter:${index}`}>
+                        {card.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="일반 카드">
                     {BASIC_CARD_POOL.map((card, index) => (
                       <option key={`basic-${card.effect}-${index}`} value={`card:basic:${index}`}>
                         {card.name}
@@ -6415,7 +6456,7 @@ export default function Home() {
               ))}
               {rememberedEnemyCells.map((memory) => (
                 <span
-                  className="map-enemy is-memory"
+                  className={`map-enemy is-memory ${isHigherRegionMapEnemy(memory.encounterIndex, memory.position) ? "is-overlevel" : ""}`}
                   key={`memory-${memory.roomKey}`}
                   style={{
                     left: MAP_PADDING + (memory.position.x - DUNGEON_MIN_X + MAP_WORLD_MARGIN_X) * (MAP_ROOM_WIDTH + MAP_CELL_GAP) + MAP_ROOM_WIDTH / 2,
@@ -6430,7 +6471,7 @@ export default function Home() {
               ))}
               {visibleMapEnemies.map((enemy) => (
                 <span
-                  className={`map-enemy is-${enemy.awareness} ${mapCollisionEnemyIds.includes(enemy.id) ? "is-colliding" : ""}`}
+                  className={`map-enemy is-${enemy.awareness} ${isHigherRegionMapEnemy(enemy.encounterIndex, enemy.position) ? "is-overlevel" : ""} ${mapCollisionEnemyIds.includes(enemy.id) ? "is-colliding" : ""}`}
                   key={enemy.id}
                   style={{
                     left: MAP_PADDING + (enemy.position.x - DUNGEON_MIN_X + MAP_WORLD_MARGIN_X) * (MAP_ROOM_WIDTH + MAP_CELL_GAP) + MAP_ROOM_WIDTH / 2,
@@ -6790,7 +6831,18 @@ export default function Home() {
                         <CardFace card={offer.card} />
                       </div>
                     ) : offer.consumable ? (
-                      <div className={`consumable-ticket ${offer.consumable.type}`}>
+                      <div
+                        className={`consumable-ticket ${offer.consumable.type}`}
+                        title={offer.consumable.description}
+                        onMouseEnter={(event) => showConsumablePreview(offer.consumable!, event.clientX, event.clientY)}
+                        onMouseMove={(event) => showConsumablePreview(offer.consumable!, event.clientX, event.clientY)}
+                        onMouseLeave={() => setHoveredConsumable(null)}
+                        onFocus={(event) => {
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          showConsumablePreview(offer.consumable!, bounds.right, bounds.bottom);
+                        }}
+                        onBlur={() => setHoveredConsumable(null)}
+                      >
                         <strong>{offer.consumable.name}</strong>
                         <small>{offer.consumable.description}</small>
                       </div>
@@ -6800,6 +6852,16 @@ export default function Home() {
                 ))}
               </div>
             </section>
+            {hoveredConsumable && !consumableDrag && (
+              <aside
+                className={`deck-consumable-preview-floating ${hoveredConsumable.type}`}
+                style={{ left: deckPreviewPosition.x, top: deckPreviewPosition.y }}
+                aria-live="polite"
+              >
+                <strong>{hoveredConsumable.name}</strong>
+                <p>{hoveredConsumable.description}</p>
+              </aside>
+            )}
           </div>
         )}
 
@@ -7899,7 +7961,19 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                       </div>
                     ))}
                     {battleRewardConsumables.map((item) => (
-                      <div className={`battle-reward-consumable consumable-ticket ${item.type}`} key={item.id}>
+                      <div
+                        className={`battle-reward-consumable consumable-ticket ${item.type}`}
+                        key={item.id}
+                        title={item.description}
+                        onMouseEnter={(event) => showConsumablePreview(item, event.clientX, event.clientY)}
+                        onMouseMove={(event) => showConsumablePreview(item, event.clientX, event.clientY)}
+                        onMouseLeave={() => setHoveredConsumable(null)}
+                        onFocus={(event) => {
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          showConsumablePreview(item, bounds.right, bounds.bottom);
+                        }}
+                        onBlur={() => setHoveredConsumable(null)}
+                      >
                         <strong>{item.name}</strong>
                         <small>{item.description}</small>
                       </div>
@@ -7914,6 +7988,17 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
               </button>
             </div>
           </div>
+        )}
+
+        {hoveredConsumable && !consumableDrag && (
+          <aside
+            className={`deck-consumable-preview-floating ${hoveredConsumable.type}`}
+            style={{ left: deckPreviewPosition.x, top: deckPreviewPosition.y }}
+            aria-live="polite"
+          >
+            <strong>{hoveredConsumable.name}</strong>
+            <p>{hoveredConsumable.description}</p>
+          </aside>
         )}
 
         {dragging?.moved && (
