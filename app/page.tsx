@@ -126,6 +126,22 @@ type CardEffect =
   | "orion"
   | "cassiopeia";
 
+// 카드의 kind과 별개로 피해를 주는 효과는 공격 카드로 취급한다.
+// 휩쓸기처럼 스킬 kind를 가진 전체 공격도 여기에 포함한다.
+const ATTACK_CARD_EFFECTS = new Set<CardEffect>([
+  "sweep",
+  "doubleHit",
+  "ironRampage",
+  "magicStrike",
+  "shockwave",
+  "meteor",
+  "hydra",
+]);
+
+function isAttackCard(card: { kind: CardKind; effect: CardEffect }) {
+  return card.kind === "strike" || ATTACK_CARD_EFFECTS.has(card.effect);
+}
+
 const HAND_PASSIVE_EFFECTS = new Set<CardEffect>(["combatManual", "grimoire"]);
 type Phase = "drawing" | "playing" | "discarding" | "enemy-turn" | "resolving";
 type Screen = "map" | "battle";
@@ -877,6 +893,7 @@ const BATTLE_THEME_COLOR_FIELDS: Array<{ key: keyof BattleThemeColors; label: st
 ];
 
 const MAX_PLAYER_HP = 50;
+const DEBUG_PLAYER_HP = 999;
 const IRON_WALL_COST = 2;
 const IRON_WALL_RESISTANCE = 2;
 const UNPLAYABLE_CARD_EFFECTS = new Set<CardEffect>(["slime", "soil", "combatManual", "grimoire"]);
@@ -1767,7 +1784,7 @@ function createSlimeCard(id: number): Card {
     cost: 0,
     value: 1,
     draw: 0,
-    damageType: "physical",
+    damageType: "magic",
     revealed: true,
     token: true,
     enemyToken: true,
@@ -2302,7 +2319,7 @@ const DEFENSE_WATERMARK_EFFECTS = new Set<CardEffect>([
 ]);
 
 function cardWatermarkCategory(card: Card) {
-  if (card.kind === "strike" || card.effect === "sweep" || card.effect === "doubleHit") return "attack";
+  if (isAttackCard(card)) return "attack";
   if (DEFENSE_WATERMARK_EFFECTS.has(card.effect)) return "defense";
   return "skill";
 }
@@ -2438,7 +2455,7 @@ function CardFace({
       case "blessing":
         return <span><strong className="effect-keyword">마법 저항</strong>을 {card.forged ? 2 : "1[2]"} 얻습니다.</span>;
       case "odinSpear":
-        return <><span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 15 얻습니다.</span><span>이번 전투에서 <strong className="effect-keyword">재련</strong>된 횟수만큼 이 카드의 비용이 1씩 감소합니다.</span></>;
+        return <><span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 15 얻습니다.</span><span>이번 전투에서 다른 카드를 <strong className="effect-keyword">재련</strong>한 횟수만큼 이 카드의 비용이 1씩 감소합니다.</span></>;
       case "massDeal":
         return <><span>빈 파일을 하나 생성합니다.</span><span>리셔플 시 [그리고 즉시] 파일에 카드를 균등하게 놓습니다.</span></>;
       case "sturdyStance":
@@ -2466,7 +2483,7 @@ function CardFace({
       case "superStrategist":
         return <span><span className="effect-star">★★★★★</span>을 얻습니다.</span>;
       case "slime":
-        return <span><strong className="effect-keyword">사용 불가</strong>. 턴 종료 시 손패에 있다면 피해를 12 받습니다.</span>;
+        return <span><strong className="effect-keyword">사용 불가</strong>. 턴 종료 시 손패에 있다면 <span className="effect-type magic">마법 피해</span>를 12 받습니다.</span>;
       case "relic":
         return <span>도깨비의 <strong className="effect-keyword">힘</strong>을 4 잃게 합니다.</span>;
       case "soil":
@@ -2586,7 +2603,7 @@ function canForgeCardOnto(movingCard: Card, targetCard?: Card, lawResearchCount 
   if (!targetCard) return false;
   const targetCost = cardEnergyCost(targetCard, lawResearchCount, forgeCount);
   if (movingCard.effect === "obsidianDagger") {
-    return targetCard.kind === "strike"
+    return isAttackCard(targetCard)
       && obsidianDaggerForgeCosts(movingCard).includes(targetCost);
   }
   if (movingCard.forged) return false;
@@ -2815,6 +2832,14 @@ export default function Home() {
   const [deckEditorSnapshot, setDeckEditorSnapshot] = useState<DeckEditorSnapshot | null>(null);
   const [openedCardPack, setOpenedCardPack] = useState<Card[] | null>(null);
   const [battleCardView, setBattleCardView] = useState<"deck" | "piles" | "discard" | null>(null);
+  const [researchDragPreview, setResearchDragPreview] = useState<{
+    card: Card;
+    count: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [selectedHandCardId, setSelectedHandCardId] = useState<number | null>(null);
   const [dyingEnemyIds, setDyingEnemyIds] = useState<Set<string>>(() => new Set());
   const [transformedCardNewIds, setTransformedCardNewIds] = useState<Set<number>>(() => new Set());
@@ -2850,7 +2875,9 @@ export default function Home() {
   const deckCards = activeDeck?.cards ?? [];
   const inventoryCapacity = INVENTORY_CAPACITY + (blessings.includes("bag") ? 12 : 0);
   const maxOwnedDecks = MAX_OWNED_DECKS + (blessings.includes("bag") ? 1 : 0);
-  const maxPlayerHp = MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0);
+  const maxPlayerHp = debugMode
+    ? DEBUG_PLAYER_HP
+    : MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0);
   const visionHorizontalRadius = mindEyeMovesRemaining > 0 ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
   const visionVerticalRadius = mindEyeMovesRemaining > 0 ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
   const editingDeck = ownedDecks.find((deck) => deck.id === deckEditorDeckId) ?? activeDeck;
@@ -2934,6 +2961,8 @@ export default function Home() {
   };
   const enterDebugMode = () => {
     if (debugMode) return;
+    runPlayerHpRef.current = DEBUG_PLAYER_HP;
+    setRunPlayerHp(DEBUG_PLAYER_HP);
     debugPreviousActiveDeckIdRef.current = activeDeck?.id ?? null;
     const { deck, nextCardId } = createDebugAllCardsDeck(nextCardIdRef.current);
     nextCardIdRef.current = nextCardId;
@@ -3175,6 +3204,14 @@ export default function Home() {
   const pendingOriginsRef = useRef(new Map<number, DOMRect>());
   const pendingEnemyTokenIdsRef = useRef(new Set<number>());
   const pendingPileTokenSourcesRef = useRef(new Map<number, string>());
+  const researchDragImageRef = useRef<HTMLCanvasElement | null>(null);
+  const researchDragActiveRef = useRef(false);
+  const clearResearchDrag = () => {
+    researchDragActiveRef.current = false;
+    researchDragImageRef.current?.remove();
+    researchDragImageRef.current = null;
+    setResearchDragPreview(null);
+  };
   const handCardRefs = useRef(new Map<number, HTMLButtonElement>());
   const dragRef = useRef<DragState & { startX: number; startY: number } | null>(null);
   const timersRef = useRef<number[]>([]);
@@ -3187,6 +3224,7 @@ export default function Home() {
   const numpadMovementTimerRef = useRef<number | null>(null);
   const pileScrollRef = useRef<HTMLDivElement | null>(null);
   const pilePanRef = useRef<{ startX: number; scrollLeft: number } | null>(null);
+  const pileAutoScrollRef = useRef<{ pointerX: number; frame: number | null }>({ pointerX: 0, frame: null });
   const [pilePanning, setPilePanning] = useState(false);
   const mapDragRef = useRef<{
     startX: number;
@@ -5191,6 +5229,49 @@ export default function Home() {
     setPilePanning(false);
   };
 
+  const stopPileAutoScroll = () => {
+    const autoScroll = pileAutoScrollRef.current;
+    if (autoScroll.frame !== null) window.cancelAnimationFrame(autoScroll.frame);
+    autoScroll.frame = null;
+  };
+
+  const updatePileAutoScroll = (pointerX: number) => {
+    const autoScroll = pileAutoScrollRef.current;
+    autoScroll.pointerX = pointerX;
+    if (autoScroll.frame !== null) return;
+
+    const tick = () => {
+      const viewport = pileScrollRef.current;
+      if (!viewport || viewport.scrollWidth <= viewport.clientWidth) {
+        autoScroll.frame = null;
+        return;
+      }
+      const bounds = viewport.getBoundingClientRect();
+      const edgeSize = Math.min(96, Math.max(48, bounds.width * 0.16));
+      const distanceFromLeft = autoScroll.pointerX - bounds.left;
+      const distanceFromRight = bounds.right - autoScroll.pointerX;
+      let scrollDelta = 0;
+      if (distanceFromLeft < edgeSize) {
+        scrollDelta = -Math.ceil(Math.min(1, (edgeSize - distanceFromLeft) / edgeSize) * 18);
+      } else if (distanceFromRight < edgeSize) {
+        scrollDelta = Math.ceil(Math.min(1, (edgeSize - distanceFromRight) / edgeSize) * 18);
+      }
+      const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+      if (
+        scrollDelta === 0
+        || (scrollDelta < 0 && viewport.scrollLeft <= 0)
+        || (scrollDelta > 0 && viewport.scrollLeft >= maxScrollLeft)
+      ) {
+        autoScroll.frame = null;
+        return;
+      }
+      viewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + scrollDelta));
+      autoScroll.frame = window.requestAnimationFrame(tick);
+    };
+
+    autoScroll.frame = window.requestAnimationFrame(tick);
+  };
+
   const zoomMap = (event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault();
     if (mapTraveling) return;
@@ -5258,8 +5339,8 @@ export default function Home() {
           },
         ],
         {
-          duration: 480,
-          delay: index * 65,
+          duration: 300,
+          delay: index * 50,
           easing: "cubic-bezier(.2,.72,.25,1)",
           fill: "backwards",
         },
@@ -5268,7 +5349,9 @@ export default function Home() {
 
     origins.clear();
     pendingEnemyTokenIdsRef.current.clear();
-    const finishDelay = (hasEnemyTokenFlight ? 860 : 500) + Math.max(0, game.hand.length - 1) * 65;
+    const finishDelay = hasEnemyTokenFlight
+      ? 860 + Math.max(0, game.hand.length - 1) * 65
+      : 320 + Math.max(0, game.hand.length - 1) * 50;
     const timer = window.setTimeout(() => {
       handCardRefs.current.forEach((element) => { element.style.zIndex = ""; });
       if (!game.clearPlan) setPhase("playing");
@@ -5324,7 +5407,7 @@ export default function Home() {
       setGame((current) => ({ ...current, message: `${card.name}은(는) 사용할 수 없습니다. 파일 위로 옮겨 길을 만들어 보세요.` }));
       return;
     }
-    const isRewardAttack = card.kind === "strike" || card.effect === "doubleHit" || card.effect === "ironRampage" || card.effect === "magicStrike" || card.effect === "shockwave" || card.effect === "sweep" || card.effect === "meteor" || card.effect === "hydra" || card.effect === "odinSpear";
+    const isRewardAttack = isAttackCard(card);
     const isRewardAttackAll = card.effect === "ironRampage" || card.effect === "shockwave" || card.effect === "sweep" || card.effect === "odinSpear";
     const rewardTarget = card.effect === "magicStrike"
       ? lowestHealthEnemy(game.enemies)
@@ -5476,7 +5559,7 @@ export default function Home() {
       const isIronWall = card.effect === "ironWall";
       const isMassDeal = card.effect === "massDeal";
       const isSturdyStance = card.effect === "sturdyStance";
-      const isDamageCard = card.kind === "strike" || isDoubleHit || isIronRampage || isShockwave || isMagicStrike || isSweepAttack || isMeteor || isHydra;
+      const isDamageCard = isAttackCard(card);
       const isAttackAll = isIronRampage || isShockwave || isSweepAttack || isOdinSpear;
       const isWave = card.effect === "ironWave";
       if (isDamageCard && !isAttackAll && !isMagicStrike && !isMeteor && !isHydra && !targetEnemyId) return current;
@@ -6110,6 +6193,7 @@ export default function Home() {
         && !(game.pendingResearchDraw === "astronomy" && source.type === "pile")) ||
       phase !== "playing"
     ) return;
+    stopPileAutoScroll();
     event.currentTarget.setPointerCapture(event.pointerId);
     const nextDrag = {
       card,
@@ -6132,6 +6216,8 @@ export default function Home() {
     const nextDrag = { ...current, x: event.clientX, y: event.clientY, moved };
     dragRef.current = nextDrag;
     setDragging(nextDrag);
+    if (moved) updatePileAutoScroll(event.clientX);
+    else stopPileAutoScroll();
   };
 
   const moveCardToPile = (drag: DragState, targetPileIndex: number) => {
@@ -6374,6 +6460,7 @@ export default function Home() {
   const finishDrag = (event: ReactPointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     if (!current) return;
+    stopPileAutoScroll();
     if (current.moved) {
       const dropZone = document
         .elementFromPoint(event.clientX, event.clientY)
@@ -6436,6 +6523,7 @@ export default function Home() {
   };
 
   const cancelDrag = () => {
+    stopPileAutoScroll();
     dragRef.current = null;
     setDragging(null);
   };
@@ -6485,9 +6573,17 @@ export default function Home() {
       };
       let nextTurnPhysicalVulnerabilityGain = 0;
       let nextTurnMagicVulnerabilityGain = 0;
-      const toxicSlimeBlocked = game.invulnerable ? 0 : Math.min(toxicSlimeDamage, remainingPhysicalBlock);
-      const toxicSlimeDamageTaken = game.invulnerable ? 0 : toxicSlimeDamage - toxicSlimeBlocked;
-      remainingPhysicalBlock -= toxicSlimeBlocked;
+      const toxicSlimeDamageAfterResistance = reduceEnemyDamageByResistance(
+        toxicSlimeDamage,
+        "magic",
+        game.playerPhysicalResistance,
+        game.playerMagicResistance,
+      );
+      const toxicSlimeBlocked = game.invulnerable ? 0 : Math.min(toxicSlimeDamageAfterResistance, remainingMagicBlock);
+      const toxicSlimeDamageTaken = game.invulnerable
+        ? 0
+        : (toxicSlimeDamageAfterResistance - toxicSlimeBlocked) * vulnerabilityMultiplier(game.playerMagicVulnerability);
+      remainingMagicBlock -= toxicSlimeBlocked;
       let remainingHp = Math.max(0, game.playerHp - toxicSlimeDamageTaken);
       const hpAfterToxicSlime = remainingHp;
       const physicalBlockAfterToxicSlime = remainingPhysicalBlock;
@@ -6531,7 +6627,7 @@ export default function Home() {
           doubleNextAttack: false,
           enemies: enemiesAfterBlockDecay,
           status: remainingHp === 0 ? "lost" : "playing",
-          message: remainingHp === 0 ? "유독성 점액의 피해로 쓰러졌습니다." : "추가 턴을 시작합니다.",
+          message: remainingHp === 0 ? "유독성 점액의 마법 피해로 쓰러졌습니다." : "추가 턴을 시작합니다.",
         });
         setPhase(remainingHp === 0 ? "playing" : "drawing");
         if (remainingHp > 0) later(drawCards, 120);
@@ -6943,7 +7039,7 @@ export default function Home() {
       cards: cardPoolStatsCards.filter((card) => card.rarity === rarity),
     }));
     const cardPoolKindStats = [
-      { label: "공격 카드", match: (card: CardBlueprint) => card.kind === "strike" },
+      { label: "공격 카드", match: (card: CardBlueprint) => isAttackCard(card) },
       {
         label: "방어를 주는 카드",
         match: (card: CardBlueprint) => cardGivesPhysicalDefense(card) && !cardGivesMagicDefense(card),
@@ -8626,6 +8722,16 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
       <section
         className={`battlefield ${dragging ? `${dragging.source.type === "hand" ? `dragging-${dragging.card.kind}` : "dragging-from-pile"} dragging-solitaire` : ""}`}
         aria-label="전투 화면"
+        onDragOver={(event) => {
+          if (!researchDragActiveRef.current) return;
+          // 연구 카드 드래그 중에는 전장을 유효한 이동 영역으로 유지해
+          // 브라우저의 금지 커서가 나타나지 않게 한다. 실제 drop은 손패만 처리한다.
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          setResearchDragPreview((current) => current
+            ? { ...current, x: event.clientX, y: event.clientY }
+            : current);
+        }}
         style={{
           "--battle-board-color": battleThemeColors.board,
           "--battle-card-color": battleThemeColors.card,
@@ -8643,6 +8749,25 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
           "--battle-magic-color": battleThemeColors.magic,
         } as CSSProperties}
       >
+        {researchDragPreview && (
+          <div
+            className="research-drag-preview"
+            style={{
+              left: researchDragPreview.x,
+              top: researchDragPreview.y,
+              width: researchDragPreview.width,
+              height: researchDragPreview.height,
+            }}
+            aria-hidden="true"
+          >
+            <div
+              className={`deck-editor-card battle-ledger-card rarity-${researchDragPreview.card.rarity} ${researchDragPreview.card.enemyToken ? "rarity-enemy-token" : ""} ${researchDragPreview.card.rarity === "legendary" ? "is-painted" : ""}`}
+              style={{ width: "74px", height: "76px", margin: 0 }}
+            >
+              <DeckEditorCardIcon card={researchDragPreview.card} count={researchDragPreview.count} />
+            </div>
+          </div>
+        )}
         {debugMode && (
           <details hidden className="debug-theme-panel">
             <summary>색상 조작</summary>
@@ -8825,9 +8950,34 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                     onDragStart={(event) => {
                       const cardId = cardIds.at(-1);
                       if (cardId === undefined) return;
+                      clearResearchDrag();
+                      const source = event.currentTarget;
+                      const bounds = source.getBoundingClientRect();
+                      const dragImage = document.createElement("canvas");
+                      dragImage.width = 1;
+                      dragImage.height = 1;
+                      Object.assign(dragImage.style, {
+                        position: "fixed",
+                        left: "-10000px",
+                        top: "-10000px",
+                        pointerEvents: "none",
+                      });
+                      document.body.appendChild(dragImage);
+                      researchDragImageRef.current = dragImage;
+                      researchDragActiveRef.current = true;
+                      setResearchDragPreview({
+                        card,
+                        count,
+                        x: bounds.left + bounds.width / 2,
+                        y: bounds.top + bounds.height / 2,
+                        width: bounds.width,
+                        height: bounds.height,
+                      });
                       event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setDragImage(dragImage, 0, 0);
                       event.dataTransfer.setData("text/plain", `research-discard:${cardId}`);
                     }}
+                    onDragEnd={clearResearchDrag}
                     onMouseEnter={(event) => moveDeckCardPreview(event, card)}
                     onMouseMove={(event) => moveDeckCardPreview(event, card)}
                     onMouseLeave={() => { setHoveredDeckCard(null); clearCardKeywordHover(); }}
@@ -9108,8 +9258,8 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                 <strong>{playerName}</strong>
                 <div className="player-health-popup-anchor">
                   <div className="healthbar player-health">
-                    <i style={{ width: `${(game.playerHp / MAX_PLAYER_HP) * 100}%` }} />
-                    <span>{game.playerHp} / {MAX_PLAYER_HP}</span>
+                    <i style={{ width: `${(game.playerHp / maxPlayerHp) * 100}%` }} />
+                    <span>{game.playerHp} / {maxPlayerHp}</span>
                   </div>
                   {damagePopup && (
                     <div className={`combat-popup player-combat-popup ${damagePopup.text === "막음" ? "is-blocked" : ""}`} key={damagePopup.key}>
@@ -9171,7 +9321,10 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.enemyT
                 if (!payload.startsWith("research-discard:")) return;
                 event.preventDefault();
                 const cardId = Number(payload.slice("research-discard:".length));
-                if (Number.isInteger(cardId)) retrieveNecromancyResearchCard(cardId, true);
+                if (Number.isInteger(cardId)) {
+                  clearResearchDrag();
+                  retrieveNecromancyResearchCard(cardId, true);
+                }
               }}
             >
             {displayedHand.map((card, index) => card ? (

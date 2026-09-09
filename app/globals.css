@@ -5036,6 +5036,20 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .battle-ledger-card-stack.rarity-enemy-token .battle-ledger-stack-layer { border-color: #68a090; }
 .battle-card-ledger-panel .battle-ledger-card { cursor: help; }
 .battle-card-ledger-panel .battle-ledger-card:hover { transform: none; box-shadow: 0 2px 3px rgba(0,0,0,.18); }
+.research-drag-preview {
+  position: fixed;
+  z-index: 220;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  opacity: 1;
+  filter: drop-shadow(0 5px 8px rgba(0,0,0,.36));
+}
+.research-drag-preview .battle-ledger-card {
+  pointer-events: none;
+  cursor: grabbing;
+  transform: none;
+  opacity: 1;
+}
 .battle-card-preview-floating { position: fixed; }
 .card-keyword-popover {
   position: fixed;
