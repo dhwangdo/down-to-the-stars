@@ -167,8 +167,9 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   font-size: 13px;
   letter-spacing: normal;
 }
-.quick-pickup-card.rarity-basic { color: var(--battle-basic-band-color, #59616b); }
-.quick-pickup-card.rarity-starter { color: #827669; }
+.quick-pickup-card.rarity-basic { color: var(--battle-basic-band-color, #555B60); }
+.quick-pickup-card.rarity-status { color: #68a090; }
+.quick-pickup-card.rarity-starter { color: #756A60; }
 .quick-pickup-card.rarity-special { color: var(--battle-special-band-color, #3472a2); }
 .quick-pickup-card.rarity-rare { color: var(--battle-rare-band-color, #7e3ab6); }
 .simple-room-action-notice {
@@ -226,6 +227,168 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 
 .debug-spawn-controls button:hover { background: #fff8e8; }
 
+.debug-card-stats-trigger {
+  min-height: 31px;
+  padding: 5px 11px;
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 3px;
+  color: #111;
+  background: #f5f1e7;
+  cursor: pointer;
+  font: 700 12px Arial, sans-serif;
+}
+
+.debug-card-stats-trigger:hover { background: #fff8e8; }
+
+.card-pool-stats-overlay {
+  position: fixed;
+  z-index: 180;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0,0,0,.68);
+}
+
+.card-pool-stats-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  width: min(900px, calc(100vw - 36px));
+  max-height: min(760px, calc(100vh - 44px));
+  overflow: hidden;
+  border: 1px solid #6e6b62;
+  border-radius: 6px;
+  color: #f4f4f0;
+  background: rgba(16,22,19,.98);
+  box-shadow: 0 16px 52px rgba(0,0,0,.52);
+}
+
+.card-pool-stats-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #515751;
+}
+
+.card-pool-stats-panel header p {
+  margin: 0 0 3px;
+  color: #a9c6b1;
+  font: 10px Arial, sans-serif;
+  letter-spacing: .12em;
+}
+
+.card-pool-stats-panel header h2 { margin: 0; font-size: 22px; }
+.card-pool-stats-panel header span { color: #c4cec7; font: 11px Arial, sans-serif; }
+
+.card-pool-stats-panel header button {
+  padding: 8px 14px;
+  border: 1px solid #89978c;
+  border-radius: 3px;
+  color: #fff;
+  background: rgba(255,255,255,.1);
+  cursor: pointer;
+  font: 800 13px Arial, sans-serif;
+}
+
+.card-pool-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.card-pool-stat-group {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 4px;
+  background: rgba(255,255,255,.045);
+}
+
+.card-pool-stat-group:last-child { grid-column: 1 / -1; }
+.card-pool-stat-group h3 { margin: 0 0 9px; color: #e9f4eb; font-size: 15px; }
+.card-pool-stat-group ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.card-pool-stat-group li { position: relative; display: grid; gap: 4px; }
+
+.card-pool-stat-group li > span {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-pool-stat-group li strong { font-size: 12px; }
+.card-pool-stat-group li small { color: #c4cec7; font: 11px Arial, sans-serif; }
+
+.card-pool-stat-group li i {
+  display: block;
+  width: 0;
+  height: 4px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #6ca58a, #b7d889);
+}
+
+.card-pool-stat-cards {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.card-pool-stat-group li:hover .card-pool-stat-cards,
+.card-pool-stat-group li:focus .card-pool-stat-cards,
+.card-pool-stat-group li:focus-within .card-pool-stat-cards {
+  display: flex;
+}
+
+.card-pool-stat-cards .deck-editor-card {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 4px;
+  cursor: default;
+}
+
+.card-pool-stat-cards .deck-editor-card:hover {
+  transform: none;
+  box-shadow: 0 2px 3px rgba(0,0,0,.18);
+}
+
+.card-pool-stat-cards .editor-card-cost { top: 3px; left: 4px; font-size: 12px; }
+.card-pool-stat-cards .editor-card-name { font-size: 9px; }
+.card-pool-stat-cards .inventory-card-count { font-size: 10px; }
+
+.card-pool-stat-popover {
+  position: fixed;
+  z-index: 240;
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(320px, calc(100vh - 24px));
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid #9fb4a6;
+  border-radius: 5px;
+  color: #f4f4f0;
+  background: rgba(15, 23, 19, .98);
+  box-shadow: 0 10px 30px rgba(0,0,0,.48);
+  pointer-events: none;
+}
+.card-pool-stat-popover > strong { color: #e9f4eb; font-size: 13px; }
+.card-pool-stat-popover-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 270px;
+  padding: 2px;
+  overflow: auto;
+}
 .debug-enemy-codex {
   position: relative;
   z-index: 90;
@@ -582,6 +745,8 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .map-room.is-reachable:hover { transform: translateY(-2px); filter: brightness(1.12); }
 .map-room:focus-visible { outline: 3px solid #87958d; outline-offset: 2px; }
 .map-room.is-current { z-index: 2; border-color: #a7771f; background: #d9b852; box-shadow: none; }
+/* 현재 플레이어 칸은 지역별 타일 색보다 항상 우선한다. */
+.map-room.is-region-2.is-current { border-color: #a7771f; background: #d9b852; }
 .map-room.is-out-of-vision {
   filter: grayscale(1) contrast(1.05) brightness(.76);
 }
@@ -1525,10 +1690,27 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 }
 
 .deck-card-preview-floating {
-  position: absolute;
+  /* All card previews use viewport coordinates from getBoundingClientRect(). */
+  position: fixed;
   z-index: 140;
   --card-w: 136px;
   --card-h: 191px;
+  pointer-events: none;
+}
+
+.map-player-edge-indicator {
+  position: absolute;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #e9ddbc;
+  border-radius: 50%;
+  color: #f5d46a;
+  background: rgba(34,70,51,.92);
+  box-shadow: 0 2px 8px rgba(0,0,0,.5), 0 0 0 2px rgba(20,30,24,.5);
+  font: 900 18px/1 Arial, sans-serif;
   pointer-events: none;
 }
 
@@ -1837,7 +2019,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 
 .deck-viewer-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   width: min(980px, 100%);
   height: min(720px, calc(100vh - 48px));
   overflow: hidden;
@@ -1915,6 +2097,13 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .deck-viewer-tabs button strong > span:not(.deck-name-with-editions)::after { content: ")"; }
 .deck-viewer-tabs .is-empty { border-style: dashed; color: #8b887f; background: rgba(255,255,255,.18); }
 
+.deck-viewer-sort {
+  justify-content: flex-end;
+  padding: 7px 14px;
+  border-bottom: 1px solid #aaa69b;
+  background: #e8e5dc;
+}
+
 .deck-name-with-editions {
   position: relative;
   display: inline;
@@ -1951,6 +2140,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   --card-h: 191px;
   display: grid;
   grid-template-columns: repeat(5, 136px);
+  align-items: start;
   align-content: start;
   justify-content: center;
   gap: 12px;
@@ -2055,8 +2245,8 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   background: var(--battle-cost-color, #39aee6);
   border-right: 1px solid color-mix(in srgb, var(--battle-cost-color, #39aee6) 62%, black);
 }
-.deck-list-entry.rarity-basic strong { color: #e6e8ee; }
-.deck-list-entry.rarity-starter strong { color: #827669; }
+.deck-list-entry.rarity-basic strong { color: #555B60; }
+.deck-list-entry.rarity-starter strong { color: #756A60; }
 .deck-list-entry.rarity-special strong { color: #67cfff; }
 .deck-list-entry.rarity-rare strong { color: #d59aff; }
 .deck-list-entry.rarity-enemy-token {
@@ -2260,7 +2450,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   place-items: center;
   width: 32px;
   height: 32px;
-  cursor: help;
+  cursor: default;
   color: #a82ee2;
   font: 900 42px/1 "Malgun Gothic", sans-serif;
 }
@@ -2282,9 +2472,9 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   pointer-events: none;
 }
 .intent-effect-icon.is-superscript {
-  align-self: flex-start;
-  margin-top: -12px;
-  margin-left: -10px;
+  /* Keep the effect marker beside the attack pattern, not above it. */
+  align-self: center;
+  margin: 0 0 0 2px;
 }
 .intent-icons.is-effect-only .intent-effect-icon { width: 52px; height: 60px; font-size: 72px; }
 .intent.is-defeated {
@@ -2970,8 +3160,9 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .card-name::after {
   display: none;
 }
-.card-name.rarity-basic { color: #e6e8ee; background: transparent; }
-.card-name.rarity-starter { color: #827669; background: transparent; }
+.card-name.rarity-basic { color: #555B60; background: transparent; }
+.card-name.rarity-status { color: #68a090; background: transparent; }
+.card-name.rarity-starter { color: #756A60; background: transparent; }
 .card-name.rarity-special { color: #67cfff; background: transparent; }
 .card-name.rarity-rare { color: #d59aff; background: transparent; }
 .card-name.rarity-enemy-token {
@@ -3018,8 +3209,9 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   border-radius: 6px 6px 0 0;
   content: "";
 }
-.card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-basic)::after { background: var(--battle-basic-band-color, #59616b); }
-.card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-starter)::after { background: #827669; }
+.card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-basic)::after { background: var(--battle-basic-band-color, #555B60); }
+.card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-status)::after { background: #68a090; }
+.card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-starter)::after { background: #756A60; }
 .card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-special)::after { background: var(--battle-special-band-color, #3472a2); }
 .card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-rare)::after { background: var(--battle-rare-band-color, #7e3ab6); }
 .card-style-simple .card-face:not(:has(.card-name.is-painted)):has(.card-name.rarity-enemy-token)::after { background: #68A090; }
@@ -3040,6 +3232,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 }
 .card-style-simple .card-face:not(:has(.card-name.is-painted)) .card-cost { color: #fff; }
 .card-style-simple .card-face:not(:has(.card-name.is-painted)) .card-name.rarity-basic,
+.card-style-simple .card-face:not(:has(.card-name.is-painted)) .card-name.rarity-status,
 .card-style-simple .card-face:not(:has(.card-name.is-painted)) .card-name.rarity-starter,
 .card-style-simple .card-face:not(:has(.card-name.is-painted)) .card-name.rarity-special,
 .card-style-simple .card-face:not(:has(.card-name.is-painted)) .card-name.rarity-rare { background: transparent; }
@@ -3059,18 +3252,20 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 }
 .card-style-simple .deck-list-entry:not(.is-painted) strong {
   align-self: stretch;
-  color: var(--battle-basic-band-color, #59616b);
+  color: var(--battle-basic-band-color, #555B60);
   background: #fff;
 }
 .card-style-simple .deck-list-entry.rarity-special:not(.is-painted) strong { color: var(--battle-special-band-color, #3472a2); }
-.card-style-simple .deck-list-entry.rarity-starter:not(.is-painted) strong { color: #827669; }
+.card-style-simple .deck-list-entry.rarity-status:not(.is-painted) strong { color: #68a090; }
+.card-style-simple .deck-list-entry.rarity-starter:not(.is-painted) strong { color: #756A60; }
 .card-style-simple .deck-list-entry.rarity-rare:not(.is-painted) strong { color: var(--battle-rare-band-color, #7e3ab6); }
 .card-style-simple .deck-list-entry:not(.is-painted) .deck-list-cost {
   color: #fff;
-  background: var(--battle-basic-band-color, #59616b);
+  background: var(--battle-basic-band-color, #555B60);
 }
 .card-style-simple .deck-list-entry.rarity-special:not(.is-painted) .deck-list-cost { background: var(--battle-special-band-color, #3472a2); }
-.card-style-simple .deck-list-entry.rarity-starter:not(.is-painted) .deck-list-cost { background: #827669; }
+.card-style-simple .deck-list-entry.rarity-status:not(.is-painted) .deck-list-cost { background: #68a090; }
+.card-style-simple .deck-list-entry.rarity-starter:not(.is-painted) .deck-list-cost { background: #756A60; }
 .card-style-simple .deck-list-entry.rarity-rare:not(.is-painted) .deck-list-cost { background: var(--battle-rare-band-color, #7e3ab6); }
 .card-style-simple .deck-list-entry:not(.is-painted) .deck-list-count {
   align-self: stretch;
@@ -3078,11 +3273,12 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   place-items: center;
   margin-right: -8px;
   padding-inline: 7px;
-  color: var(--battle-basic-band-color, #59616b);
+  color: var(--battle-basic-band-color, #555B60);
   background: #fff;
 }
 .card-style-simple .deck-list-entry.rarity-special:not(.is-painted) .deck-list-count { color: var(--battle-special-band-color, #3472a2); }
-.card-style-simple .deck-list-entry.rarity-starter:not(.is-painted) .deck-list-count { color: #827669; }
+.card-style-simple .deck-list-entry.rarity-status:not(.is-painted) .deck-list-count { color: #68a090; }
+.card-style-simple .deck-list-entry.rarity-starter:not(.is-painted) .deck-list-count { color: #756A60; }
 .card-style-simple .deck-list-entry.rarity-rare:not(.is-painted) .deck-list-count { color: var(--battle-rare-band-color, #7e3ab6); }
 
 .card-name.is-painted { background: transparent; }
@@ -3105,7 +3301,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   word-break: keep-all;
   text-wrap: balance;
   hyphens: none;
-  transform: none;
+  transform: translateY(var(--card-effect-shift, 0px));
 }
 
 .card-effect-copy > span {
@@ -3123,10 +3319,17 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   font-weight: 400;
 }
 
+.rule-keyword {
+  margin-left: 0;
+  margin-right: 4px;
+}
+
 .forge-rule {
   display: block;
   margin-top: 3px;
 }
+
+.forge-rule + .forge-rule { margin-top: 0; }
 
 .solitaire-keyword {
   margin-left: 0;
@@ -3203,20 +3406,25 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 
 .combat-buffs {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 22px;
   font: 11px Arial, sans-serif;
 }
 .combat-buffs span {
+  flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid rgba(255,255,255,.38);
   border-radius: 3px;
   color: white;
   background: rgba(24,48,38,.45);
+  white-space: nowrap;
 }
 .combat-buffs .is-buff { background: rgba(47, 132, 185, .78); }
 .combat-buffs .is-debuff { background: rgba(112, 67, 153, .82); }
+.combat-buffs .rule-buff { cursor: help; }
 
 .status-strip {
   min-height: 32px;
@@ -3305,6 +3513,122 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   place-items: center;
   padding: 20px;
   background: rgba(0, 0, 0, .74);
+}
+
+.battle-deck-check-overlay {
+  position: fixed;
+  z-index: 150;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .68);
+}
+
+.battle-deck-check-panel {
+  width: min(520px, 100%);
+  padding: 26px 28px 30px;
+  border: 1px solid rgba(235, 224, 192, .7);
+  border-radius: 12px;
+  color: #f7f2e4;
+  background: rgba(20, 31, 27, .97);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .5);
+  text-align: center;
+}
+
+.battle-deck-check-panel > p {
+  margin: 0 0 8px;
+  color: #c9b879;
+  font: 700 12px/1 Arial, sans-serif;
+  letter-spacing: .16em;
+}
+
+.battle-deck-check-panel h2 {
+  margin: 0;
+  font: 800 clamp(20px, 3vw, 28px)/1.25 Arial, sans-serif;
+}
+
+.battle-deck-check-panel > span {
+  display: block;
+  margin-top: 10px;
+  color: #d1d7d2;
+  font: 500 14px/1.4 Arial, sans-serif;
+}
+
+.battle-deck-check-composition {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.22);
+  text-align: left;
+}
+
+.battle-deck-check-composition h3 {
+  margin: 0 0 10px;
+  color: #f5f7f4;
+  font: 700 14px/1.2 Arial, sans-serif;
+  text-align: center;
+}
+
+.battle-deck-check-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.battle-deck-check-confirm {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(173,225,188,.72);
+  border-radius: 4px;
+  color: #fff;
+  background: rgba(72,123,88,.72);
+  cursor: pointer;
+  font: 800 14px/1.2 Arial, sans-serif;
+}
+
+.battle-deck-check-confirm:hover:not(:disabled) { background: rgba(90,146,105,.82); }
+.battle-deck-check-confirm:disabled { cursor: not-allowed; opacity: .45; }
+
+.battle-deck-check-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.battle-deck-check-options button {
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  place-content: center;
+  padding: 10px;
+  border: 1px solid #6d796f;
+  border-radius: 8px;
+  color: #f4f0e5;
+  background: #293b31;
+  cursor: pointer;
+}
+
+.battle-deck-check-options button:hover,
+.battle-deck-check-options button.is-selected {
+  border-color: #b8d8bb;
+  background: #3f654e;
+  box-shadow: 0 0 0 2px rgba(184, 216, 187, .22);
+}
+
+.battle-deck-check-options button strong {
+  font: 800 15px/1.2 Arial, sans-serif;
+}
+
+.battle-deck-check-options button small {
+  color: #d9e1d6;
+  font: 700 12px/1 Arial, sans-serif;
 }
 
 .player-name-dialog {
@@ -4078,7 +4402,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .trash-icon::before { width: 31px; }
 .deck-editor-card,
 .deck-list-entry {
-  --editor-rarity: #59616b;
+  --editor-rarity: #555B60;
   position: relative;
   display: grid;
   grid-template-columns: 1fr;
@@ -4101,8 +4425,10 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 }
 .deck-editor-card.rarity-special,
 .deck-list-entry.rarity-special { --editor-rarity: #3472a2; }
+.deck-editor-card.rarity-status,
+.deck-list-entry.rarity-status { --editor-rarity: #68a090; }
 .deck-editor-card.rarity-starter,
-.deck-list-entry.rarity-starter { --editor-rarity: #827669; }
+.deck-list-entry.rarity-starter { --editor-rarity: #756A60; }
 .deck-editor-card.rarity-rare,
 .deck-list-entry.rarity-rare { --editor-rarity: #7e3ab6; }
 .deck-editor-card.rarity-legendary,
@@ -4559,7 +4885,95 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   box-shadow: inset 0 0 0 1px rgba(173,225,188,.28);
 }
 .deck-viewer-tabs .is-empty { color: rgba(255,255,255,.5); background: rgba(255,255,255,.025); }
+.deck-viewer-sort { border-color: rgba(255,255,255,.22); background: rgba(3, 7, 5, .2); }
 .deck-viewer-grid { background: rgba(255,255,255,.025); }
+
+/* Match the shrine and battle deck prompts to the transparent loadout UI. */
+.shrine-overlay,
+.battle-deck-check-overlay { background: rgba(4, 8, 7, .72); }
+.shrine-panel,
+.battle-deck-check-panel {
+  border-color: rgba(255,255,255,.32);
+  color: #f5f7f4;
+  background: rgba(10, 16, 13, .16);
+  box-shadow: 0 12px 42px rgba(0,0,0,.42);
+}
+.shrine-panel > header {
+  border-color: rgba(255,255,255,.24);
+  color: #fff;
+  background: rgba(5, 9, 7, .22);
+}
+.shrine-panel header p,
+.shrine-panel header span,
+.shrine-panel header small { color: rgba(255,255,255,.7); }
+.shrine-panel header h2,
+.shrine-panel .shop-header-status > strong { color: #fff; }
+.shrine-panel .shop-header-status button {
+  border-color: rgba(255,255,255,.36);
+  color: #fff;
+  background: rgba(255,255,255,.1);
+}
+.shrine-transfer { background: rgba(7, 12, 9, .13); }
+.shrine-deck-column {
+  border-color: rgba(255,255,255,.22);
+  background: rgba(255,255,255,.045);
+}
+.shrine-deck-tabs {
+  border-color: rgba(255,255,255,.22);
+  background: rgba(3, 7, 5, .2);
+}
+.shrine-deck-tabs button {
+  border-color: rgba(255,255,255,.28);
+  color: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.07);
+}
+.shrine-deck-tabs button.is-active {
+  border-color: rgba(173,225,188,.72);
+  color: #fff;
+  background: rgba(72,123,88,.58);
+}
+.shrine-deck-column > header {
+  border-color: rgba(255,255,255,.22);
+  color: #fff;
+}
+.shrine-transfer-arrow { color: #d5e3d7; }
+.shrine-collapse-live { color: #fff; }
+.shrine-extract-slot {
+  border-color: rgba(205,181,231,.72);
+  color: rgba(255,255,255,.75);
+  background: rgba(103,82,118,.22);
+}
+.shrine-extract-slot.is-drop-active {
+  border-color: #d9b7f0;
+  background: rgba(123,85,151,.42);
+}
+.shrine-confirm-extract,
+.shrine-result > button {
+  border-color: rgba(173,225,188,.72);
+  color: #fff;
+  background: rgba(72,123,88,.72);
+}
+.shrine-result { color: #fff; background: rgba(7,12,9,.18); }
+.shrine-result p,
+.shrine-result > small { color: rgba(255,255,255,.7); }
+.shrine-result h3,
+.shrine-result.is-collapsed h3,
+.shrine-result.is-intact h3 { color: #fff; }
+.shrine-result-symbol { color: #d8c7e8; }
+
+.battle-deck-check-panel { border-radius: 5px; }
+.battle-deck-check-panel > p { color: rgba(255,255,255,.62); }
+.battle-deck-check-options button {
+  border-color: rgba(255,255,255,.28);
+  color: rgba(255,255,255,.9);
+  background: rgba(255,255,255,.07);
+}
+.battle-deck-check-options button:hover,
+.battle-deck-check-options button.is-selected {
+  border-color: rgba(173,225,188,.72);
+  background: rgba(72,123,88,.58);
+  box-shadow: inset 0 0 0 1px rgba(173,225,188,.28);
+}
 
 .battle-card-ledger {
   position: absolute;
@@ -4610,18 +5024,50 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   top: 0;
   width: 74px;
   height: 74px;
-  border: 4px solid #59616b;
+  border: 4px solid #555B60;
   border-radius: 4px;
   background: #d7ddd9;
   box-shadow: 0 2px 3px rgba(0,0,0,.24);
 }
 .battle-ledger-card-stack.rarity-special .battle-ledger-stack-layer { border-color: #3472a2; }
+.battle-ledger-card-stack.rarity-status .battle-ledger-stack-layer { border-color: #68a090; }
 .battle-ledger-card-stack.rarity-rare .battle-ledger-stack-layer { border-color: #7e3ab6; }
 .battle-ledger-card-stack.rarity-legendary .battle-ledger-stack-layer { border-color: #d5a928; }
 .battle-ledger-card-stack.rarity-enemy-token .battle-ledger-stack-layer { border-color: #68a090; }
 .battle-card-ledger-panel .battle-ledger-card { cursor: help; }
 .battle-card-ledger-panel .battle-ledger-card:hover { transform: none; box-shadow: 0 2px 3px rgba(0,0,0,.18); }
 .battle-card-preview-floating { position: fixed; }
+.card-keyword-popover {
+  position: fixed;
+  z-index: 180;
+  display: flex;
+  width: min(310px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  pointer-events: none;
+}
+.card-keyword-popover section {
+  flex: none;
+  padding: 8px 10px;
+  border: 2px solid rgba(170,108,117,.9);
+  border-radius: 6px;
+  color: #f5eee8;
+  background: rgba(58,31,37,.96);
+  box-shadow: 0 5px 16px rgba(0,0,0,.42);
+}
+.card-keyword-popover strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #f8d4aa;
+  font: 700 12px/1.3 Arial, sans-serif;
+}
+.card-keyword-popover p {
+  margin: 0;
+  color: #f5eee8;
+  font: 12px/1.45 Arial, sans-serif;
+}
 
 .battlefield .player-zone .controls {
   position: absolute;
@@ -4672,6 +5118,10 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   cursor: grab;
   transition: opacity .18s ease, filter .18s ease;
 }
+.deck-editor-card.is-ticket-drop-target {
+  border-color: #8fc7ed !important;
+  box-shadow: 0 0 0 2px rgba(143,199,237,.6), 0 0 15px rgba(143,199,237,.55);
+}
 .deck-editor-card.is-temporary { transition: opacity .18s ease, filter .18s ease; }
 .deck-editor-card.is-pending-removal:active { cursor: grabbing; }
 .deck-editor-card.is-temporary.is-blink-dim,
@@ -4705,4 +5155,25 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   font: 700 13px/1.3 Pretendard, sans-serif;
   letter-spacing: 0;
   text-align: center;
+}
+
+/* Keep the map deck selector clear of room-action notices while they are open. */
+.map-deck-selector {
+  transition: transform .18s ease;
+}
+.map-deck-selector.is-notice-visible {
+  transform: translateY(-112px);
+}
+@media (max-width: 640px) {
+  .map-deck-selector.is-notice-visible {
+    transform: translateY(-96px);
+  }
+
+  .card-pool-stats-overlay { padding: 10px; }
+  .card-pool-stats-panel {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+  }
+  .card-pool-stats-grid { grid-template-columns: 1fr; }
+  .card-pool-stat-group:last-child { grid-column: auto; }
 }

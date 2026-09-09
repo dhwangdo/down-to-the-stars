@@ -11,7 +11,7 @@ export default function ContentLab() {
   return (
     <main className={styles.lab}>
       <header className={styles.header}>
-        <small>RUINFALL CONTENT LAB</small>
+        <small>DOWN TO THE STARS CONTENT LAB</small>
         <h1>적 · 카드 작업실</h1>
         <p>다음 콘텐츠 추가 작업은 이 탭에서 진행합니다. 현재 게임 데이터는 변경하지 않았습니다.</p>
       </header>

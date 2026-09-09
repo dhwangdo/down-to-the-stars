@@ -205,7 +205,7 @@ test("an enemy already collided with by the player stays in place for this enemy
   assert.deepEqual(result.collisionEnemyIds, ["occupied-room"]);
 });
 
-test("multiple enemies can move onto the player in the same turn", () => {
+test("enemies cannot overlap when moving onto the player in the same turn", () => {
   const enemies = [
     { id: "first", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "alerted" },
     { id: "second", position: { x: 0, y: 2 }, encounterIndex: 1, awareness: "alerted" },
@@ -217,6 +217,6 @@ test("multiple enemies can move onto the player in the same turn", () => {
     alwaysWalkable,
     randomValues(0.9, 0, 0, 0.9, 0, 0),
   );
-  assert.deepEqual(result.collisionEnemyIds, ["first", "second"]);
-  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 1, y: 1 }, { x: 1, y: 1 }]);
+  assert.deepEqual(result.collisionEnemyIds, ["first"]);
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 1, y: 1 }, { x: 0, y: 2 }]);
 });

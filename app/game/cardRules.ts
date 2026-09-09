@@ -28,3 +28,14 @@ export function dealCardsToFixedPiles<T>(
   });
   return piles;
 }
+
+/** Cards are dealt one at a time from the leftmost pile, then repeated. */
+export function dealCardsEvenlyToPiles<T>(cards: T[], pileCount: number): T[][] {
+  const count = Math.max(0, Math.floor(pileCount));
+  if (count === 0) return [];
+  const piles = Array.from({ length: count }, () => [] as T[]);
+  cards.forEach((card, cardIndex) => {
+    piles[cardIndex % count].push(card);
+  });
+  return piles;
+}

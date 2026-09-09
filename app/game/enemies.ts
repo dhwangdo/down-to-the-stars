@@ -46,6 +46,7 @@ export type EnemyState = {
   actions: EnemyAction[];
   intentIndex: number;
   strength: number;
+  /** 속성이 없는 적 방어도. 레거시 상태 키 이름은 호환을 위해 유지한다. */
   physicalBlock: number;
   variant: EnemyVariant;
   sturdyThreshold: number;
@@ -393,7 +394,6 @@ export function applyPlayerAttack(
   enemy: EnemyState,
   damage: number,
   repetitions: number,
-  damageType: EnemyDamageType = "physical",
 ) {
   let next = enemy;
   for (let hit = 0; hit < repetitions && next.hp > 0; hit += 1) {
@@ -405,7 +405,8 @@ export function applyPlayerAttack(
       next = { ...next, hp: Math.max(0, next.hp - 1) };
       continue;
     }
-    const blocked = damageType === "physical" ? Math.min(damage, next.physicalBlock) : 0;
+    // 적 방어는 속성이 없는 단일 방어도다. 플레이어의 모든 공격이 같은 방어를 소모한다.
+    const blocked = Math.min(damage, next.physicalBlock);
     next = {
       ...next,
       hp: Math.max(0, next.hp - (damage - blocked)),

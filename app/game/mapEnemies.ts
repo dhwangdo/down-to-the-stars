@@ -182,9 +182,7 @@ export function advanceMapEnemies(
         x: enemy.position.x + direction.x,
         y: enemy.position.y + direction.y,
       }))
-      .filter((position) =>
-        isWalkable(position)
-        && (!occupied.has(positionKey(position)) || positionKey(position) === positionKey(playerPosition)));
+      .filter((position) => isWalkable(position) && !occupied.has(positionKey(position)));
 
     if (enemy.awareness === "alerted") {
       candidates = candidates.filter((position) =>

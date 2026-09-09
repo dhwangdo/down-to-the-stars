@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ruinfall",
-  description: "Ruinfall",
+  title: "Down to the Stars",
+  description: "Down to the Stars",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
