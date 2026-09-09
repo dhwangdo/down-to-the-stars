@@ -69,6 +69,6 @@
 
 ## 중요한 주소
 
-- 저장소: https://github.com/dhwangdo/ruinfall
-- 공개 게임: https://dhwangdo.github.io/ruinfall/
+- 저장소: https://github.com/dhwangdo/down-to-the-stars
+- 공개 게임: https://dhwangdo.github.io/down-to-the-stars/
 

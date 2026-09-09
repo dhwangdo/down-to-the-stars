@@ -2,7 +2,7 @@
 
 솔리테어식 파일 조작, 덱빌딩 전투, 그리드 지도 탐험을 결합한 웹게임 프로토타입입니다.
 
-- 공개 게임: https://dhwangdo.github.io/ruinfall/
+- 공개 게임: https://dhwangdo.github.io/down-to-the-stars/
 - 현재 상태와 다음 작업: [`docs/HANDOFF.md`](docs/HANDOFF.md)
 - 구현된 게임 규칙: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md)
 - Python 사용자를 위한 코드 설명: [`docs/CODE_GUIDE.md`](docs/CODE_GUIDE.md)

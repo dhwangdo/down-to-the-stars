@@ -38,8 +38,8 @@ $env:GITHUB_ACTIONS='true'; npm run build:pages
 
 ## GitHub와 배포
 
-- 원격 저장소: `https://github.com/dhwangdo/ruinfall`
-- 공개 주소: `https://dhwangdo.github.io/ruinfall/`
+- 원격 저장소: `https://github.com/dhwangdo/down-to-the-stars`
+- 공개 주소: `https://dhwangdo.github.io/down-to-the-stars/`
 - `main`에 push하면 GitHub Actions가 Pages 배포를 시도한다.
 - 최근 GitHub Actions 실행은 코드 오류가 아니라 runner `startup_failure`로 시작조차 못 한 사례가 있다. 배포 실패 시 코드 문제와 GitHub 인프라 문제를 구분해 보고한다.
 - 한 덩어리의 작업이 완료되면 검사 후 commit/push한다. 빈 커밋을 반복해서 배포만 재시도하지 않는다.
