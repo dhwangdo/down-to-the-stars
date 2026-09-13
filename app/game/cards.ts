@@ -156,7 +156,6 @@ export const LEGACY_SPECIAL_CARD_POOL: CardBlueprint[] = [
 
 // 현재 플레이에 등장하는 추가 카드는 이 목록만 사용합니다.
 export const SPECIAL_CARD_POOL: CardBlueprint[] = [
-  { kind: "strike", effect: "obsidianDagger", rarity: "rare", name: "흑요석 단검", cost: 0, value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "astronomyResearch", rarity: "special", name: "천문학 연구", cost: 1, value: 3, draw: 0, damageType: "physical", forgeCost: 2, exhaust: true, rule: true },
   { kind: "skill", effect: "necromancyResearch", rarity: "special", name: "강령학 연구", cost: 1, value: 3, draw: 0, damageType: "physical", forgeCost: 2, exhaust: true, rule: true },
   { kind: "skill", effect: "metallurgyResearch", rarity: "special", name: "금속학 연구", cost: 1, value: 1, draw: 0, damageType: "physical", exhaust: true, rule: true },
@@ -186,6 +185,7 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
 ];
 
 export const RARE_CARD_POOL: CardBlueprint[] = [
+  { kind: "strike", effect: "obsidianDagger", rarity: "rare", name: "흑요석 단검", cost: 0, value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "steelHeart", rarity: "rare", name: "강철심장", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "rapidFire", rarity: "rare", name: "연사", cost: 0, value: 0, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "superStrategist", rarity: "rare", name: "전술가", cost: 1, value: 5, draw: 0, damageType: "physical", exhaust: true },
@@ -257,7 +257,7 @@ type DefenseCardLike = Pick<CardBlueprint, "effect" | "damageType">;
 
 export function cardGivesPhysicalDefense(card: DefenseCardLike) {
   if (card.effect === "defend") return card.damageType === "physical";
-  return ["deflect", "starGuard", "ironWall", "ironWave", "ironRampage", "suppression", "starArk", "odinSpear"].includes(card.effect);
+  return ["deflect", "starGuard", "plateArmorDefense", "ironWall", "ironWave", "ironRampage", "suppression", "starArk", "odinSpear"].includes(card.effect);
 }
 
 export function cardGivesMagicDefense(card: DefenseCardLike) {

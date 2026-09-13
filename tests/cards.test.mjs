@@ -14,8 +14,8 @@ import {
 test("card pools preserve the current content counts", () => {
   assert.equal(STARTER_CARD_POOL.length, 3);
   assert.equal(BASIC_CARD_POOL.length, 8);
-  assert.equal(SPECIAL_CARD_POOL.length, 27);
-  assert.equal(RARE_CARD_POOL.length, 12);
+  assert.equal(SPECIAL_CARD_POOL.length, 26);
+  assert.equal(RARE_CARD_POOL.length, 13);
   assert.equal(LEGENDARY_CARD_POOL.length, 6);
   assert.equal(ALL_CARD_BLUEPRINTS.length, 57);
 });
@@ -30,6 +30,17 @@ test("current card data keeps key balance values and removed systems absent", ()
     ],
   );
   assert.equal(SPECIAL_CARD_POOL.find((card) => card.name === "별의 방주")?.value, 10);
+  assert.equal(SPECIAL_CARD_POOL.some((card) => card.name === "흑요석 단검"), false);
+  const obsidianDagger = RARE_CARD_POOL.find((card) => card.name === "흑요석 단검");
+  assert.deepEqual(
+    obsidianDagger && {
+      effect: obsidianDagger.effect,
+      rarity: obsidianDagger.rarity,
+      cost: obsidianDagger.cost,
+      value: obsidianDagger.value,
+    },
+    { effect: "obsidianDagger", rarity: "rare", cost: 0, value: 1 },
+  );
   const oldCore = SPECIAL_CARD_POOL.find((card) => card.name === "낡은 노심");
   assert.equal(oldCore?.cost, 0);
   assert.equal(oldCore?.exhaust, true);

@@ -59,6 +59,7 @@ import {
   getSpellStraight,
   obsidianDaggerForgeCosts,
 } from "./game/cardEffects";
+import { calculateDefenseGain, getDefenseBaseValue } from "./game/defenseRules";
 import {
   canPayEnergyCost,
   maximumBattleEnergy,
@@ -1229,11 +1230,10 @@ function CardFace({
     ? "-"
     : cardEnergyCost(card, ruleCostReduction, forgeCount);
   const damageValue = card.value + strength;
-  const defenseValue = (card.value + agility) * defenseMultiplier;
+  const defenseValue = calculateDefenseGain(card, { agility, defenseMultiplier });
+  const defenseBaseValue = getDefenseBaseValue(card);
   const damageNumber = changedNumber(damageValue, card.value);
-  const defenseNumber = changedNumber(defenseValue, card.value);
-  const waveDefenseNumber = changedNumber(5 * defenseMultiplier, 5);
-  const rampageDefenseNumber = changedNumber(8 * defenseMultiplier, 8);
+  const defenseNumber = changedNumber(defenseValue, defenseBaseValue);
   const costChangeClass = displayedCost !== "-" && typeof displayedCost === "number"
     && card.cost !== undefined && displayedCost < card.cost ? "is-positive" : card.baseCost === undefined
       ? ""
@@ -1312,7 +1312,7 @@ function CardFace({
       case "warmUp":
         return <span><strong className="effect-keyword">힘</strong>을 1 얻습니다. 이번 턴 <strong className="effect-keyword">힘</strong>을 {card.value} 추가로 얻습니다.</span>;
       case "ironWall":
-        return <><span><strong className="effect-keyword">물리 저항</strong>을 {IRON_WALL_RESISTANCE} 얻습니다.</span><span><span className="effect-type physical">방어</span>를 5 얻습니다.</span></>;
+        return <><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span><strong className="effect-keyword">물리 저항</strong>을 {IRON_WALL_RESISTANCE} 얻습니다.</span></>;
       case "fourHit":
         return <span><span className="effect-type damage">피해</span>를 {damageNumber}씩 4번 줍니다.</span>;
       case "doubleHit":
@@ -1328,7 +1328,7 @@ function CardFace({
       case "starGuard":
         return <><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span><span className="effect-star">★</span>을 얻습니다.</span></>;
       case "starArk":
-        return <><span><span className="effect-type physical">방어</span>를 10 얻습니다.</span><span><span className="effect-type magic">마법 방어</span>를 10 얻습니다.</span><span><span className="effect-star">★</span>을 얻습니다.</span></>;
+        return <><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span><span className="effect-type magic">마법 방어</span>를 {defenseNumber} 얻습니다.</span><span><span className="effect-star">★</span>을 얻습니다.</span></>;
       case "obsidianDagger":
         return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span>[밑패를 <strong className="effect-keyword">소멸</strong>시키고 피해량을 이 카드에 추가합니다.]</span><span>무한히 <strong className="effect-keyword">재련</strong>할 수 있습니다.</span></>;
       case "astronomyResearch":
@@ -1354,7 +1354,7 @@ function CardFace({
       case "blessing":
         return <span><strong className="effect-keyword">마법 저항</strong>을 {card.forged ? 2 : "1[2]"} 얻습니다.</span>;
       case "odinSpear":
-        return <><span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 15 얻습니다.</span><span>이번 전투에서 다른 카드를 <strong className="effect-keyword">재련</strong>한 횟수만큼 이 카드의 비용이 1씩 감소합니다.</span></>;
+        return <><span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span>이번 전투에서 다른 카드를 <strong className="effect-keyword">재련</strong>한 횟수만큼 이 카드의 비용이 1씩 감소합니다.</span></>;
       case "massDeal":
         return <><span>빈 파일을 하나 생성합니다.</span><span>리셔플 시 [그리고 즉시] 파일에 카드를 균등하게 놓습니다.</span></>;
       case "sturdyStance":
@@ -1408,11 +1408,11 @@ function CardFace({
       case "cassiopeia":
         return null;
       case "ironWave":
-        return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 {waveDefenseNumber} 얻습니다.</span></>;
+        return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span></>;
       case "waterWave":
         return <><span><span className="effect-type magic">마법 방어</span>를 {defenseNumber} 얻습니다.</span><span>카드를 {card.draw}장 뽑습니다.</span></>;
       case "ironRampage":
-        return <><span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 {rampageDefenseNumber} 얻습니다.</span></>;
+        return <><span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span></>;
     }
   })();
   return (
@@ -4925,6 +4925,7 @@ export default function Home() {
       const isMassDeal = card.effect === "massDeal";
       const isSturdyStance = card.effect === "sturdyStance";
       const isDamageCard = isAttackCard(card);
+      const isBlockCard = cardGivesPhysicalDefense(card) || cardGivesMagicDefense(card);
       const isAttackAll = isIronRampage || isShockwave || isSweepAttack || isOdinSpear;
       const isWave = card.effect === "ironWave" || card.effect === "waterWave";
       if (isDamageCard && !isAttackAll && !isMagicStrike && !isMeteor && !isHydra && !targetEnemyId) return current;
@@ -4963,35 +4964,20 @@ export default function Home() {
             ? { ...enemy, strength: enemy.strength - card.value }
             : enemy)
           : current.enemies;
-      const isBlockCard = card.effect === "defend"
-        || card.effect === "deflect"
-        || card.effect === "starGuard"
-        || isPlateArmorDefense;
-      const defenseValue = card.value;
       const suppressionDamageDealt = isSuppression && targetEnemy
         ? Math.max(0, targetEnemy.hp - (nextEnemies.find((enemy) => enemy.id === targetEnemy.id)?.hp ?? targetEnemy.hp))
         : 0;
-      const blockGained = isStarArk
-        ? 10 * current.defenseMultiplier
-        : isSuppression
-          ? suppressionDamageDealt
-          : isBlockCard
-        ? (defenseValue + current.agility + combatManualBonus) * current.defenseMultiplier
-        : isIronRampage || isWave || isIronWall || isOdinSpear
-          ? (isIronRampage ? 8 : isOdinSpear ? 15 : 5) * repetitions * current.defenseMultiplier
-          : 0;
-      const rawNextPhysicalBlock = (isBlockCard && card.damageType === "physical")
-        || isIronRampage
-        || isIronWall
-        || isSuppression
-        || isStarArk
-        || isOdinSpear
-        || (isWave && card.damageType === "physical")
+      const blockGained = isSuppression
+        ? suppressionDamageDealt
+        : calculateDefenseGain(card, {
+          agility: current.agility + combatManualBonus,
+          defenseMultiplier: current.defenseMultiplier,
+          repetitions,
+        });
+      const rawNextPhysicalBlock = cardGivesPhysicalDefense(card)
         ? current.playerPhysicalBlock + blockGained
         : current.playerPhysicalBlock;
-      const rawNextMagicBlock = (isBlockCard && card.damageType === "magic")
-        || isStarArk
-        || (isWave && card.damageType === "magic")
+      const rawNextMagicBlock = cardGivesMagicDefense(card)
         ? current.playerMagicBlock + blockGained
         : current.playerMagicBlock;
       let thornsPhysicalBlock = rawNextPhysicalBlock;
@@ -5082,14 +5068,14 @@ export default function Home() {
           : null;
       const action = (() => {
         if (isShockwave || isSweepAttack) return `${card.name}: 적 전체 공격`;
-        if (isOdinSpear) return `오딘의 창: 적 전체에게 피해 ${damage} · 방어 15`;
+        if (isOdinSpear) return `오딘의 창: 적 전체에게 피해 ${damage} · 방어 ${blockGained}`;
         if (isMeteor) return `${card.name}: 사용한 ★ ${current.starsSpent}개만큼 무작위 공격`;
         if (isHydra) return `${card.name}: 무작위 공격 ${repetitions}회`;
         if (isMagicStrike) return "마법 타격 발동";
         if (isIronRampage) return `적 전체에게 피해 ${damage} · 방어 ${blockGained}${repetitions > 1 ? " (2회 발동)" : ""}`;
         if (isWave) return `${targetEnemy?.name}에게 피해 ${damage} · ${DEFENSE_LABEL[card.damageType]} ${blockGained}${repetitions > 1 ? " (2회 발동)" : ""}`;
         if (isSuppression) return `${targetEnemy?.name}에게 피해 ${damage} · 방어 ${blockGained} 획득`;
-        if (isStarArk) return "방어 10 · 마법 방어 10 · ★ 획득";
+        if (isStarArk) return `방어 ${blockGained} · 마법 방어 ${blockGained} · ★ 획득`;
         if (isMassDeal) return card.forged
           ? "대분배: 파일을 균등하게 재분배하고 빈 파일을 추가"
           : "대분배: 빈 파일을 추가";
@@ -5106,9 +5092,9 @@ export default function Home() {
         if (card.effect === "mirrorImage") return "거울상: 방어와 마법 방어 교환";
         if (card.effect === "blessing") return `가호: 마법 저항 ${card.forged ? 2 : 1} 획득`;
         if (isPlateArmorDefense) return `방어 ${blockGained} 획득${card.forged ? " · 물리 저항 1 획득" : ""}`;
+        if (isIronWall) return `철벽: 방어 ${blockGained} · 물리 저항 ${IRON_WALL_RESISTANCE}`;
         if (card.kind === "strike") return `${targetEnemy?.name}에게 피해 ${damage}${repetitions > 1 ? " (2회 발동)" : ""}`;
         if (isBlockCard) return `${DEFENSE_LABEL[card.damageType]} ${blockGained} 획득`;
-        if (card.effect === "ironWall") return `물리 저항 ${IRON_WALL_RESISTANCE} · 방어 5 획득`;
         if (card.effect === "steelHeart") return `물리 저항 · 마법 저항 ${card.value} 획득`;
         if (card.effect === "battlePlan") return `★ ${card.value}개 획득 · 드로우 ${card.draw}`;
         if (card.effect === "prepare") return canDraw ? "드로우할 파일을 선택하세요." : "버릴 카드를 선택하세요.";
