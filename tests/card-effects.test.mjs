@@ -22,9 +22,20 @@ test("fixed multi-purpose defense effects use the same calculation", () => {
   assert.equal(calculateDefenseGain({ effect: "ironWall", value: 2 }, { ...options, repetitions: 2 }), 16);
 });
 
-test("damage-based and persistence effects stay outside fixed defense calculation", () => {
+test("cards without ordinary defense values stay at zero without a base override", () => {
   const options = { agility: 3, defenseMultiplier: 2 };
 
   assert.equal(calculateDefenseGain({ effect: "suppression", value: 15 }, options), 0);
   assert.equal(calculateDefenseGain({ effect: "sturdyStance", value: 0 }, options), 0);
+});
+
+test("suppression uses the shared defense calculation with dealt damage as its base", () => {
+  assert.equal(calculateDefenseGain(
+    { effect: "suppression", value: 15 },
+    { baseValue: 10, agility: 3, defenseMultiplier: 2 },
+  ), 26);
+  assert.equal(calculateDefenseGain(
+    { effect: "suppression", value: 15 },
+    { baseValue: 0, agility: 3, defenseMultiplier: 2 },
+  ), 6);
 });

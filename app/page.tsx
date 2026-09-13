@@ -1290,7 +1290,7 @@ function CardFace({
       case "rulerCompass":
         return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-star">★</span>을 얻습니다.</span></>;
       case "suppression":
-        return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span>막히지 않은 피해만큼 <span className="effect-type physical">방어</span>를 얻습니다.</span></>;
+        return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span>막히지 않은 피해와 <strong className="effect-keyword">강인함</strong>만큼 <span className="effect-type physical">방어</span>를 얻습니다.</span></>;
       case "berserk":
         return <span><strong className="effect-keyword">에너지</strong>를 2 얻습니다. <strong className="effect-keyword">물리 취약</strong>을 2 얻습니다.</span>;
       case "transcend":
@@ -4967,13 +4967,12 @@ export default function Home() {
       const suppressionDamageDealt = isSuppression && targetEnemy
         ? Math.max(0, targetEnemy.hp - (nextEnemies.find((enemy) => enemy.id === targetEnemy.id)?.hp ?? targetEnemy.hp))
         : 0;
-      const blockGained = isSuppression
-        ? suppressionDamageDealt
-        : calculateDefenseGain(card, {
-          agility: current.agility + combatManualBonus,
-          defenseMultiplier: current.defenseMultiplier,
-          repetitions,
-        });
+      const blockGained = calculateDefenseGain(card, {
+        agility: current.agility + combatManualBonus,
+        baseValue: isSuppression ? suppressionDamageDealt : undefined,
+        defenseMultiplier: current.defenseMultiplier,
+        repetitions,
+      });
       const rawNextPhysicalBlock = cardGivesPhysicalDefense(card)
         ? current.playerPhysicalBlock + blockGained
         : current.playerPhysicalBlock;

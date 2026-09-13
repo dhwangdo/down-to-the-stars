@@ -4,6 +4,7 @@ const IRON_WALL_BASE_DEFENSE = 5;
 
 export type DefenseGainOptions = {
   agility?: number;
+  baseValue?: number;
   defenseMultiplier?: number;
   repetitions?: number;
 };
@@ -25,7 +26,7 @@ const VALUE_BASED_DEFENSE_EFFECTS = new Set<CardEffect>([
   "plateArmorDefense",
 ]);
 
-/** Fixed defense effects share one calculation: base value + agility, then multiplier. */
+/** Ordinary defense effects share one calculation: base value + agility, then multiplier. */
 export function getDefenseBaseValue(card: Pick<CardBlueprint, "effect" | "value">) {
   return FIXED_DEFENSE_VALUES[card.effect]
     ?? (VALUE_BASED_DEFENSE_EFFECTS.has(card.effect) ? card.value : 0);
@@ -33,9 +34,15 @@ export function getDefenseBaseValue(card: Pick<CardBlueprint, "effect" | "value"
 
 export function calculateDefenseGain(
   card: Pick<CardBlueprint, "effect" | "value">,
-  { agility = 0, defenseMultiplier = 1, repetitions = 1 }: DefenseGainOptions = {},
+  {
+    agility = 0,
+    baseValue: baseValueOverride,
+    defenseMultiplier = 1,
+    repetitions = 1,
+  }: DefenseGainOptions = {},
 ) {
-  const baseValue = getDefenseBaseValue(card);
-  if (baseValue === 0) return 0;
+  const hasBaseValueOverride = baseValueOverride !== undefined;
+  const baseValue = hasBaseValueOverride ? baseValueOverride : getDefenseBaseValue(card);
+  if (!hasBaseValueOverride && baseValue === 0) return 0;
   return (baseValue + agility) * defenseMultiplier * repetitions;
 }

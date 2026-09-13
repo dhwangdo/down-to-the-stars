@@ -121,7 +121,7 @@ setGame((current) => ({ ...current, energy: 2 }));
 | `app/page.tsx` | React 상태 연결, 실제 카드·적 턴 처리, 상점·축복·성소·덱 편집 이벤트, 대부분의 UI |
 | `app/game/cards.ts` | 카드 타입, 카드 정의, 획득 풀, 전투 토큰 카드 생성 |
 | `app/game/cardEffects.ts` | 카드 비용, 키워드, 재련과 솔리테어 배치 판정 |
-| `app/game/defenseRules.ts` | 강인함·방어 배율을 포함한 고정 방어 획득 계산 |
+| `app/game/defenseRules.ts` | 강인함·방어 배율을 포함한 공통 방어 획득 계산 |
 | `app/game/rewards.ts` | 덱 케이스, 에디션, 티켓, 전투 보상 생성 |
 | `app/game/battleState.ts` | 전투 초기 상태, 파일 배치와 드로우 전이 |
 | `app/game/mapRules.ts` | 지도 지역·노드·안전 지대·보스 위치·바닥 드롭 생성 |
