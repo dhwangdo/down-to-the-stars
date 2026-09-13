@@ -108,15 +108,16 @@ test("golem waits twice, then alternates a wait and a 30-damage attack", () => {
   assert.equal(chooseNextIntent(golem.actions, 4), 3);
 });
 
-test("sewer rat has a heavy strength attack that also discards", () => {
+test("sewer rat uses the requested discard patterns", () => {
   const rat = createSewerEncounterByIndex(3, () => 1)[0];
   assert.equal(rat.name, "하수구 쥐");
-  assert.equal(rat.hp, 35);
-  assert.equal(rat.actions[0].attacks[0].value, 11);
+  assert.equal(rat.hp, 40);
+  assert.deepEqual(rat.actions[0].attacks, [{ type: "physical", value: 5, hits: 2 }]);
   assert.equal(rat.actions[0].discardCount, 1);
-  assert.equal(rat.actions[1].blockGain, 10);
+  assert.deepEqual(rat.actions[1].attacks, [{ type: "physical", value: 10 }]);
   assert.equal(rat.actions[1].discardCount, 1);
-  assert.equal(rat.actions[2].attacks[0].value, 11);
+  assert.deepEqual(rat.actions[2].attacks, []);
+  assert.equal(rat.actions[2].blockGain, 10);
   assert.equal(rat.actions[2].strengthGain, 3);
   assert.equal(rat.actions[2].discardCount, 1);
   assert.equal(rat.discardPileIndex, undefined);
@@ -157,9 +158,13 @@ test("warlock attacks immediately while applying delayed physical vulnerability"
   assert.equal(warlock.actions[2].attacks[0].value, 12);
 });
 
-test("green slime randomly chooses either 8-damage pattern", () => {
+test("green slime randomly chooses either 10-damage pattern", () => {
   const slime = createSewerEncounterByIndex(7, () => 0)[0];
   assert.equal(slime.hp, 36);
+  assert.deepEqual(slime.actions.map((action) => action.attacks), [
+    [{ type: "physical", value: 10 }],
+    [{ type: "physical", value: 10 }],
+  ]);
   assert.equal(slime.givesToxicSlime, undefined);
   assert.equal(chooseNextIntent(slime.actions, 0, () => 0), 0);
   assert.equal(chooseNextIntent(slime.actions, 0, () => 0.99), 1);

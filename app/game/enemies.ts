@@ -205,12 +205,12 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "하수구 쥐",
-      hp: 35,
-      maxHp: 35,
+      hp: 40,
+      maxHp: 40,
       actions: [
-        { name: "물어뜯기", attacks: [{ type: "physical", value: 11 }], discardCount: 1, cycle: true },
-        { name: "웅크리기", attacks: [], blockGain: 10, discardCount: 1, cycle: true },
-        { name: "광폭 질주", attacks: [{ type: "physical", value: 11 }], strengthGain: 3, discardCount: 1, cycle: true },
+        { name: "물어뜯기", attacks: [{ type: "physical", value: 5, hits: 2 }], discardCount: 1, cycle: true },
+        { name: "웅크리기", attacks: [{ type: "physical", value: 10 }], discardCount: 1, cycle: true },
+        { name: "광폭 질주", attacks: [], blockGain: 10, strengthGain: 3, discardCount: 1, cycle: true },
       ],
       strength: 0,
       physicalBlock: 0,
@@ -278,8 +278,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
       hp: 40,
       maxHp: 40,
       actions: [
-        { name: "점액 충돌", attacks: [{ type: "physical", value: 8 }], randomEachTurn: true },
-        { name: "점액 주입", attacks: [{ type: "physical", value: 8 }], nextAttackMagic: true, randomEachTurn: true },
+        { name: "점액 충돌", attacks: [{ type: "physical", value: 10 }], randomEachTurn: true },
+        { name: "점액 주입", attacks: [{ type: "physical", value: 10 }], nextAttackMagic: true, randomEachTurn: true },
       ],
       strength: 0,
       physicalBlock: 0,
