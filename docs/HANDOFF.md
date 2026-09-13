@@ -106,7 +106,8 @@
 | 핵심 화면과 React 상태 연결 | `app/page.tsx` |
 | 카드 타입·정의·획득 풀 | `app/game/cards.ts` |
 | 카드 비용·재련·배치 규칙 | `app/game/cardEffects.ts` |
-| 고정 방어 획득 계산 | `app/game/defenseRules.ts` |
+| 공통 방어 획득 계산 | `app/game/defenseRules.ts` |
+| 티켓 존재·종류 확인과 소모 | `app/game/ticketRules.ts` |
 | 덱·보상·티켓 생성 | `app/game/rewards.ts` |
 | 전투 초기 상태·파일 배치·드로우 | `app/game/battleState.ts` |
 | 지도 노드·지역·안전 지대·바닥 드롭 | `app/game/mapRules.ts` |

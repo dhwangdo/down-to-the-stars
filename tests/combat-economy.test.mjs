@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canPayEnergyCost,
+  calculateCardDamage,
   economicResearchEnergyFloor,
   maximumBattleEnergy,
   radianceDamage,
@@ -27,4 +28,9 @@ test("turn energy recovery adds the maximum before clamping", () => {
 
 test("radiance gains four damage per other radiance used this turn", () => {
   assert.deepEqual([0, 1, 2, 3].map(radianceDamage), [4, 8, 12, 16]);
+});
+
+test("card damage calculation matches strength and combat manual bonuses", () => {
+  assert.equal(calculateCardDamage({ effect: "hydra", value: 9 }, 4, 2), 15);
+  assert.equal(calculateCardDamage({ effect: "radiance", value: 4 }, 4, 2, 2), 18);
 });

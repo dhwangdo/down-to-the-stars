@@ -17,3 +17,15 @@ export function canPayEnergyCost(currentEnergy: number, cost: number, activeEcon
 export function radianceDamage(otherRadiancesPlayedThisTurn: number) {
   return 4 + Math.max(0, otherRadiancesPlayedThisTurn) * 4;
 }
+
+export function calculateCardDamage(
+  card: { effect: string; value: number },
+  strength = 0,
+  combatManualBonus = 0,
+  radiancePlayedThisTurn = 0,
+) {
+  const baseDamage = card.effect === "radiance"
+    ? radianceDamage(radiancePlayedThisTurn)
+    : card.value;
+  return baseDamage + strength + combatManualBonus;
+}

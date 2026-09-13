@@ -62,8 +62,8 @@ import {
 import { calculateDefenseGain, getDefenseBaseValue } from "./game/defenseRules";
 import {
   canPayEnergyCost,
+  calculateCardDamage,
   maximumBattleEnergy,
-  radianceDamage,
   recoverBattleEnergy,
 } from "./game/combatEconomy";
 import {
@@ -97,6 +97,10 @@ import {
 } from "./game/rewards";
 import { nextRareCardDropChance } from "./game/rewardRules";
 import { ticketBasePrice, type TicketType } from "./game/shopRules";
+import {
+  consumeTicketById as consumeTicketFromAreas,
+  findTicketById as findTicketInAreas,
+} from "./game/ticketRules";
 import {
   createDeckName,
   createRandomPlayerName,
@@ -1229,7 +1233,7 @@ function CardFace({
   const displayedCost = UNPLAYABLE_CARD_EFFECTS.has(card.effect)
     ? "-"
     : cardEnergyCost(card, ruleCostReduction, forgeCount);
-  const damageValue = card.value + strength;
+  const damageValue = calculateCardDamage(card, strength);
   const defenseValue = calculateDefenseGain(card, { agility, defenseMultiplier });
   const defenseBaseValue = getDefenseBaseValue(card);
   const damageNumber = changedNumber(damageValue, card.value);
@@ -1402,7 +1406,7 @@ function CardFace({
       case "aries":
         return <span><strong className="effect-keyword">에너지</strong>를 5 얻습니다. <span className="effect-star">★★★★★</span>을 얻습니다.</span>;
       case "hydra":
-        return <span>무작위 적에게 <span className="effect-type damage">피해</span>를 9 줍니다. 9번 반복합니다.</span>;
+        return <span>무작위 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다. 9번 반복합니다.</span>;
       case "orion":
         return <span><strong className="effect-keyword">힘</strong>을 10 얻습니다.</span>;
       case "cassiopeia":
@@ -3734,26 +3738,30 @@ export default function Home() {
     `${area}:${deckId ?? ""}:${cardId}`;
 
   const findTicketById = (ticketId: string, type?: ConsumableType) => {
-    const matches = (item: Consumable) => item.id === ticketId && (
-      type === undefined || item.type === type
-    );
-    const inventoryTicket = inventoryConsumables.find(matches);
-    if (inventoryTicket) return inventoryTicket;
     const roomKey = mapRoomKey(mapPosition);
-    return (roomConsumableDrops[roomKey] ?? []).find(matches);
+    return findTicketInAreas(ticketId, type, {
+      inventory: inventoryConsumables,
+      floor: roomConsumableDrops[roomKey] ?? [],
+    });
   };
 
-  const consumeTicketById = (ticketId: string) => {
+  const consumeTicketById = (ticketId: string, type: ConsumableType) => {
+    const roomKey = mapRoomKey(mapPosition);
+    const consumed = consumeTicketFromAreas(ticketId, type, {
+      inventory: inventoryConsumables,
+      floor: roomConsumableDrops[roomKey] ?? [],
+    });
+    if (!consumed) return false;
     setInventoryConsumables((current) => {
       const next = current.filter((item) => item.id !== ticketId);
       inventoryConsumablesRef.current = next;
       return next;
     });
-    const roomKey = mapRoomKey(mapPosition);
     setRoomConsumableDrops((current) => ({
       ...current,
       [roomKey]: (current[roomKey] ?? []).filter((item) => item.id !== ticketId),
     }));
+    return true;
   };
 
   const getDraggedTicket = () => {
@@ -3886,15 +3894,15 @@ export default function Home() {
 
   const cloneCardWithTicket = (card: Card, ticketId = pendingCloneTicketId) => {
     if (!ticketId) return;
+    const ticket = findTicketById(ticketId, "cloneTicket");
+    if (!ticket) return;
     if (card.rarity === "legendary") {
       setDeckEditorMessage("전설 카드는 복제할 수 없습니다.");
       return;
     }
-    const ticket = findTicketById(ticketId, "cloneTicket");
-    if (!ticket) return;
+    if (!consumeTicketById(ticket.id, "cloneTicket")) return;
     const clone = { ...card, id: nextCardIdRef.current, revealed: false };
     nextCardIdRef.current += 1;
-    consumeTicketById(ticketId);
     setInventoryCards((current) => [...current, clone]);
     setPendingCloneTicketId(null);
     setDeckEditorMessage(`${card.name}을(를) 복제했습니다.`);
@@ -3902,15 +3910,12 @@ export default function Home() {
 
   const cloneConsumableWithTicket = (targetId: string) => {
     if (!pendingCloneTicketId) return;
-    const sourceTicket = inventoryConsumables.find((item) =>
-      item.id === pendingCloneTicketId && item.type === "cloneTicket");
+    const sourceTicket = findTicketById(pendingCloneTicketId, "cloneTicket");
     const target = inventoryConsumables.find((item) => item.id === targetId);
-    if (!sourceTicket || !target) return;
+    if (!sourceTicket || !target || target.id === sourceTicket.id) return;
+    if (!consumeTicketById(sourceTicket.id, "cloneTicket")) return;
     const clone = nextConsumable(target.type);
-    setInventoryConsumables((current) => [
-      ...current.filter((item) => item.id !== pendingCloneTicketId),
-      clone,
-    ]);
+    setInventoryConsumables((current) => [...current, clone]);
     setPendingCloneTicketId(null);
     setDeckEditorMessage(`${target.name}을(를) 복제했습니다.`);
   };
@@ -4054,7 +4059,7 @@ export default function Home() {
     if (!card) return;
     const ticket = findTicketById(ticketId, "paintTicket");
     if (!ticket) return;
-    consumeTicketById(ticketId);
+    if (!consumeTicketById(ticket.id, "paintTicket")) return;
     updateDeckCards(deck?.id, (current) => current.map((item) => item.id === cardId ? { ...item, colored: true } : item));
     setPendingPaintTicketId(null);
     setDeckEditorMessage(`${card.name}을(를) 색칠했습니다.`);
@@ -4142,6 +4147,8 @@ export default function Home() {
     const deck = ownedDecks.find((item) => item.id === deckId);
     const card = deck?.cards.find((item) => item.id === cardId);
     if (!deck || !card) return;
+    const ticket = findTicketById(ticketId, "extractTicket");
+    if (!ticket) return;
     const moved = moveDeckEditorCard({
       cardId,
       source: { area: "deck", deckId },
@@ -4150,7 +4157,7 @@ export default function Home() {
     });
     if (!moved) return;
     setDeckEditorReleasedCardIds((current) => new Set(current).add(cardId));
-    consumeTicketById(ticketId);
+    consumeTicketById(ticket.id, "extractTicket");
     setPendingExtractTicketId(null);
     setDeckEditorMessage(`${card.name}을(를) 덱에서 추출했습니다.`);
   };
@@ -4168,6 +4175,8 @@ export default function Home() {
 
   const transformCardWithTicket = (card: Card, area: "deck" | "inventory" | "floor", deckId?: string, ticketId = pendingTransformTicketId) => {
     if (!ticketId) return;
+    const ticket = findTicketById(ticketId, "transformTicket");
+    if (!ticket) return;
     const transformed = transformedCard(card);
     if (!transformed) {
       setDeckEditorMessage(card.rarity === "legendary" ? "전설 카드는 변화시킬 수 없습니다." : "변환할 다른 카드가 없습니다.");
@@ -4184,7 +4193,7 @@ export default function Home() {
         [roomKey]: (current[roomKey] ?? []).map((item) => item.id === card.id ? transformed : item),
       }));
     }
-    consumeTicketById(ticketId);
+    consumeTicketById(ticket.id, "transformTicket");
     setTransformedCardNewIds((current) => new Set(current).add(card.id));
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${card.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
@@ -4192,13 +4201,14 @@ export default function Home() {
 
   const transformConsumableWithTicket = (targetId: string) => {
     if (!pendingTransformTicketId || targetId === pendingTransformTicketId) return;
+    const sourceTicket = findTicketById(pendingTransformTicketId, "transformTicket");
     const target = inventoryConsumables.find((item) => item.id === targetId);
-    if (!target || target.type === "cardPack") return;
+    if (!sourceTicket || !target || target.id === sourceTicket.id || target.type === "cardPack") return;
     const candidates = CONSUMABLE_TYPES.filter((type) => type !== target.type);
     const transformed = nextConsumable(randomItem(candidates));
     setInventoryConsumables((current) => current
-      .filter((item) => item.id !== pendingTransformTicketId)
       .map((item) => item.id === targetId ? transformed : item));
+    consumeTicketById(sourceTicket.id, "transformTicket");
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${target.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
   };
@@ -4793,9 +4803,12 @@ export default function Home() {
       const combatManualBonus = game.hand
         .filter((item) => item.effect === "combatManual")
         .reduce((total, item) => total + item.value, 0);
-      const damage = (card.effect === "radiance" ? radianceDamage(game.radiancePlayedThisTurn) : card.value)
-        + game.strength
-        + combatManualBonus;
+      const damage = calculateCardDamage(
+        card,
+        game.strength,
+        combatManualBonus,
+        game.radiancePlayedThisTurn,
+      );
       let enemiesAfterAttack = game.enemies;
       const hitPopups: Array<{ enemyId: string; damage: number; remainingHp: number }> = [];
       const hitEnemy = (enemyId: string) => {
@@ -4941,7 +4954,7 @@ export default function Home() {
         .reduce((total, item) => total + item.value, 0);
       const grimoireBonus = current.hand.filter((item) => item.effect === "grimoire").length;
       const damagePerHit = isDamageCard
-        ? (isRadiance ? radianceDamage(current.radiancePlayedThisTurn) : card.value) + current.strength + combatManualBonus
+        ? calculateCardDamage(card, current.strength, combatManualBonus, current.radiancePlayedThisTurn)
         : 0;
       const damage = damagePerHit * repetitions;
       const thornTargets = isDamageCard
