@@ -818,6 +818,8 @@ const BATTLE_THEME_COLOR_FIELDS: Array<{ key: keyof BattleThemeColors; label: st
 
 const DEBUG_PLAYER_HP = 999;
 const GAME_VERSION = "v0.1.2";
+const COMMIT_HASH = process.env.NEXT_PUBLIC_COMMIT_HASH ?? "dev";
+const COMMIT_DATE = process.env.NEXT_PUBLIC_COMMIT_DATE ?? "unknown";
 const RESET_HOLD_DURATION_MS = 1_500;
 const INVENTORY_CAPACITY = 12;
 const MAX_OWNED_DECKS = 3;
@@ -6769,7 +6771,12 @@ export default function Home() {
         className={`game-shell map-shell card-style-simple watermark-${cardWatermarkStyle} ${constellationPreviewIndex === null ? "" : "is-previewing-constellation"}`}
         style={cardWatermarkVariables}
       >
-        <span className="game-version" aria-label={`게임 버전 ${GAME_VERSION}`}>{GAME_VERSION}</span>
+        <span
+          className="game-version"
+          aria-label={`게임 버전 ${GAME_VERSION}, 커밋 ${COMMIT_HASH}, 커밋 시각 ${COMMIT_DATE}`}
+        >
+          {GAME_VERSION} · {COMMIT_HASH} · {COMMIT_DATE}
+        </span>
         {resetHoldProgress > 0 && (
           <div className="save-reset-hold" role="status">
             <strong>새 탐험 초기화</strong>
@@ -8290,7 +8297,12 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
       className={`game-shell card-style-simple watermark-${cardWatermarkStyle} ${constellationPreviewIndex === null ? "" : "is-previewing-constellation"}`}
       style={cardWatermarkVariables}
     >
-      <span className="game-version" aria-label={`게임 버전 ${GAME_VERSION}`}>{GAME_VERSION}</span>
+      <span
+        className="game-version"
+        aria-label={`게임 버전 ${GAME_VERSION}, 커밋 ${COMMIT_HASH}, 커밋 시각 ${COMMIT_DATE}`}
+      >
+        {GAME_VERSION} · {COMMIT_HASH} · {COMMIT_DATE}
+      </span>
       {resetHoldProgress > 0 && (
         <div className="save-reset-hold" role="status">
           <strong>새 탐험 초기화</strong>
