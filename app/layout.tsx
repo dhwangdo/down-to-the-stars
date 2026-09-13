@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Down to the Stars",
-  description: "Down to the Stars",
+  description: "별을 찾아, 끝없이 아래로.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

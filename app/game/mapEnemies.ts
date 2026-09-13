@@ -8,10 +8,18 @@ export type MapEnemy = {
   encounterIndex: number;
   awareness: MapEnemyAwareness;
   damageTaken?: number;
+  isBoss?: boolean;
 };
 
 export type MapEnemyWorld = {
   enemies: MapEnemy[];
+};
+
+export type GridBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 };
 
 export type MapEnemyCellMemory = Record<string, {
@@ -20,8 +28,10 @@ export type MapEnemyCellMemory = Record<string, {
 }>;
 
 export const MAP_ENEMY_ACTIVE_RADIUS = 4;
+export const MAP_ENEMY_DISTANCE_FIELD_RADIUS = 6;
 export const MAP_PLAYER_VISION_HORIZONTAL_RADIUS = 2;
 export const MAP_PLAYER_VISION_VERTICAL_RADIUS = 2;
+export const MAP_ENEMY_SAFE_RADIUS = 2;
 export const MAP_ENEMY_SPAWN_CHANCE = 0.08;
 
 export const EIGHT_DIRECTIONS: GridPosition[] = [
@@ -99,6 +109,136 @@ function randomIndex(length: number, random: () => number) {
   return Math.min(length - 1, Math.floor(random() * length));
 }
 
+function isInsideBounds(position: GridPosition, bounds: GridBounds) {
+  return position.x >= bounds.minX
+    && position.x <= bounds.maxX
+    && position.y >= bounds.minY
+    && position.y <= bounds.maxY;
+}
+
+function defaultMovementBounds(enemies: MapEnemy[], playerPosition: GridPosition): GridBounds {
+  const padding = MAP_ENEMY_ACTIVE_RADIUS * 4 + 4;
+  const positions = [playerPosition, ...enemies.map((enemy) => enemy.position)];
+  return {
+    minX: Math.min(...positions.map((position) => position.x)) - padding,
+    maxX: Math.max(...positions.map((position) => position.x)) + padding,
+    minY: Math.min(...positions.map((position) => position.y)) - padding,
+    maxY: Math.max(...positions.map((position) => position.y)) + padding,
+  };
+}
+
+export function createEightDirectionDistanceField(
+  target: GridPosition,
+  isWalkable: (position: GridPosition) => boolean,
+  bounds: GridBounds,
+  blockedCellKeys: ReadonlySet<string> = new Set(),
+) {
+  const distances = new Map<string, number>([[positionKey(target), 0]]);
+  const queue = [{ ...target }];
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    const nextDistance = distances.get(positionKey(current))! + 1;
+    for (const direction of EIGHT_DIRECTIONS) {
+      const next = { x: current.x + direction.x, y: current.y + direction.y };
+      const nextKey = positionKey(next);
+      if (
+        !isInsideBounds(next, bounds)
+        || distances.has(nextKey)
+        || blockedCellKeys.has(nextKey)
+        || !isWalkable(next)
+      ) continue;
+      distances.set(nextKey, nextDistance);
+      queue.push(next);
+    }
+  }
+  return distances;
+}
+
+type MovementOption = {
+  position: GridPosition;
+  distanceReduction: number;
+  moved: boolean;
+};
+
+type FlowEdge = {
+  to: number;
+  reverseIndex: number;
+  capacity: number;
+  cost: number;
+  option?: MovementOption;
+};
+
+function addFlowEdge(graph: FlowEdge[][], from: number, to: number, cost: number, option?: MovementOption) {
+  const forward: FlowEdge = { to, reverseIndex: graph[to].length, capacity: 1, cost, option };
+  const reverse: FlowEdge = { to: from, reverseIndex: graph[from].length, capacity: 0, cost: -cost };
+  graph[from].push(forward);
+  graph[to].push(reverse);
+}
+
+function assignAlertedDestinations(
+  enemies: MapEnemy[],
+  optionsByEnemyId: ReadonlyMap<string, MovementOption[]>,
+) {
+  if (enemies.length === 0) return new Map<string, GridPosition>();
+  const destinationKeys = Array.from(new Set(enemies.flatMap((enemy) =>
+    (optionsByEnemyId.get(enemy.id) ?? []).map((option) => positionKey(option.position)))));
+  const destinationIndex = new Map(destinationKeys.map((key, index) => [key, index]));
+  const source = 0;
+  const enemyOffset = 1;
+  const destinationOffset = enemyOffset + enemies.length;
+  const sink = destinationOffset + destinationKeys.length;
+  const graph: FlowEdge[][] = Array.from({ length: sink + 1 }, () => []);
+  const maximumReduction = Math.max(1, ...Array.from(optionsByEnemyId.values()).flat()
+    .map((option) => option.distanceReduction));
+  const movementPriority = enemies.length * maximumReduction + 1;
+
+  enemies.forEach((enemy, enemyIndex) => {
+    const enemyNode = enemyOffset + enemyIndex;
+    addFlowEdge(graph, source, enemyNode, 0);
+    for (const option of optionsByEnemyId.get(enemy.id) ?? []) {
+      const destinationNode = destinationOffset + destinationIndex.get(positionKey(option.position))!;
+      const score = (option.moved ? movementPriority : 0) + option.distanceReduction;
+      addFlowEdge(graph, enemyNode, destinationNode, -score, option);
+    }
+  });
+  destinationKeys.forEach((_, index) => addFlowEdge(graph, destinationOffset + index, sink, 0));
+
+  for (let flow = 0; flow < enemies.length; flow += 1) {
+    const distance = Array(graph.length).fill(Number.POSITIVE_INFINITY);
+    const previousNode = Array(graph.length).fill(-1);
+    const previousEdge = Array(graph.length).fill(-1);
+    distance[source] = 0;
+    for (let pass = 0; pass < graph.length - 1; pass += 1) {
+      let changed = false;
+      for (let node = 0; node < graph.length; node += 1) {
+        if (!Number.isFinite(distance[node])) continue;
+        graph[node].forEach((edge, edgeIndex) => {
+          if (edge.capacity <= 0 || distance[node] + edge.cost >= distance[edge.to]) return;
+          distance[edge.to] = distance[node] + edge.cost;
+          previousNode[edge.to] = node;
+          previousEdge[edge.to] = edgeIndex;
+          changed = true;
+        });
+      }
+      if (!changed) break;
+    }
+    if (!Number.isFinite(distance[sink])) break;
+    for (let node = sink; node !== source; node = previousNode[node]) {
+      const edge = graph[previousNode[node]][previousEdge[node]];
+      edge.capacity -= 1;
+      graph[node][edge.reverseIndex].capacity += 1;
+    }
+  }
+
+  const assignments = new Map<string, GridPosition>();
+  enemies.forEach((enemy, enemyIndex) => {
+    const selected = graph[enemyOffset + enemyIndex]
+      .find((edge) => edge.option && edge.capacity === 0)?.option;
+    assignments.set(enemy.id, { ...(selected?.position ?? enemy.position) });
+  });
+  return assignments;
+}
+
 export function createMapEnemyWorld(
   spawnCells: GridPosition[],
   seed: number,
@@ -117,6 +257,17 @@ export function createMapEnemyWorld(
       awareness: "sleeping" as const,
     }));
   return { enemies };
+}
+
+export function clearMapEnemiesNear(
+  world: MapEnemyWorld,
+  center: GridPosition,
+  radius = MAP_ENEMY_SAFE_RADIUS,
+) {
+  return {
+    ...world,
+    enemies: world.enemies.filter((enemy) => chebyshevDistance(enemy.position, center) > radius),
+  };
 }
 
 function awarenessAfterDetection(
@@ -140,24 +291,26 @@ export function advanceMapEnemies(
   random: () => number = Math.random,
   frozenEnemyIds: ReadonlySet<string> = new Set(),
   detectionMultiplier = 1,
+  movementBounds: GridBounds = defaultMovementBounds(enemies, playerPosition),
 ) {
   const nextEnemies = enemies.map((enemy) => ({
     ...enemy,
     position: { ...enemy.position },
   }));
-  const occupied = new Map(
-    nextEnemies.map((enemy) => [positionKey(enemy.position), enemy.id]),
-  );
-  const collisionEnemyIds: string[] = [];
+  const playerKey = positionKey(playerPosition);
+  const existingColliders = nextEnemies.filter((enemy) => positionKey(enemy.position) === playerKey);
+  if (existingColliders.length > 0) {
+    return { enemies: nextEnemies, collisionEnemyIds: existingColliders.map((enemy) => enemy.id) };
+  }
 
+  const alertedMovers: MapEnemy[] = [];
+  const awakeMovers: MapEnemy[] = [];
   for (const enemy of nextEnemies) {
-    if (frozenEnemyIds.has(enemy.id)) {
-      if (positionKey(enemy.position) === positionKey(playerPosition)) {
-        collisionEnemyIds.push(enemy.id);
-      }
-      continue;
-    }
-    if (chebyshevDistance(enemy.position, activeCenter) > MAP_ENEMY_ACTIVE_RADIUS) continue;
+    if (
+      enemy.isBoss
+      || frozenEnemyIds.has(enemy.id)
+      || chebyshevDistance(enemy.position, activeCenter) > MAP_ENEMY_ACTIVE_RADIUS
+    ) continue;
 
     const distanceAtStart = chebyshevDistance(enemy.position, playerPosition);
     const nextAwareness = awarenessAfterDetection(
@@ -175,31 +328,87 @@ export function advanceMapEnemies(
       ? random() >= 0.5
       : random() < 0.9;
     if (!shouldMove) continue;
-
-    occupied.delete(positionKey(enemy.position));
-    let candidates = EIGHT_DIRECTIONS
-      .map((direction) => ({
-        x: enemy.position.x + direction.x,
-        y: enemy.position.y + direction.y,
-      }))
-      .filter((position) => isWalkable(position) && !occupied.has(positionKey(position)));
-
-    if (enemy.awareness === "alerted") {
-      candidates = candidates.filter((position) =>
-        chebyshevDistance(position, playerPosition) < distanceAtStart);
-    }
-
-    if (candidates.length > 0) {
-      enemy.position = candidates[randomIndex(candidates.length, random)];
-    }
-    occupied.set(positionKey(enemy.position), enemy.id);
-
-    if (positionKey(enemy.position) === positionKey(playerPosition)) {
-      collisionEnemyIds.push(enemy.id);
-    }
+    if (enemy.awareness === "alerted") alertedMovers.push(enemy);
+    else awakeMovers.push(enemy);
   }
 
-  return { enemies: nextEnemies, collisionEnemyIds };
+  const alertedMoverIds = new Set(alertedMovers.map((enemy) => enemy.id));
+  const blockedCellKeys = new Set(nextEnemies
+    .filter((enemy) => !alertedMoverIds.has(enemy.id))
+    .map((enemy) => positionKey(enemy.position)));
+  blockedCellKeys.delete(playerKey);
+  const distanceField = createEightDirectionDistanceField(
+    playerPosition,
+    isWalkable,
+    movementBounds,
+    blockedCellKeys,
+  );
+  const alertedOptions = new Map<string, MovementOption[]>();
+  for (const enemy of alertedMovers) {
+    const startDistance = distanceField.get(positionKey(enemy.position));
+    const options: MovementOption[] = [{
+      position: { ...enemy.position },
+      distanceReduction: 0,
+      moved: false,
+    }];
+    if (startDistance !== undefined) {
+      for (const direction of EIGHT_DIRECTIONS) {
+        const candidate = {
+          x: enemy.position.x + direction.x,
+          y: enemy.position.y + direction.y,
+        };
+        const candidateKey = positionKey(candidate);
+        const candidateDistance = distanceField.get(candidateKey);
+        if (
+          candidateDistance === undefined
+          || candidateDistance >= startDistance
+          || blockedCellKeys.has(candidateKey)
+          || !isWalkable(candidate)
+        ) continue;
+        options.push({
+          position: candidate,
+          distanceReduction: startDistance - candidateDistance,
+          moved: true,
+        });
+      }
+    }
+    alertedOptions.set(enemy.id, options);
+  }
+
+  const alertedAssignments = assignAlertedDestinations(alertedMovers, alertedOptions);
+  const alertedCollider = alertedMovers.find((enemy) =>
+    positionKey(alertedAssignments.get(enemy.id) ?? enemy.position) === playerKey);
+  if (alertedCollider) {
+    alertedCollider.position = { ...playerPosition };
+    return { enemies: nextEnemies, collisionEnemyIds: [alertedCollider.id] };
+  }
+
+  const plannedPositions = new Map(nextEnemies.map((enemy) => [enemy.id, { ...enemy.position }]));
+  alertedAssignments.forEach((position, enemyId) => plannedPositions.set(enemyId, { ...position }));
+  const occupiedCellKeys = new Set(nextEnemies.map((enemy) =>
+    positionKey(plannedPositions.get(enemy.id) ?? enemy.position)));
+
+  for (const enemy of awakeMovers) {
+    const origin = plannedPositions.get(enemy.id) ?? enemy.position;
+    occupiedCellKeys.delete(positionKey(origin));
+    const candidates = EIGHT_DIRECTIONS
+      .map((direction) => ({ x: origin.x + direction.x, y: origin.y + direction.y }))
+      .filter((position) => isWalkable(position) && !occupiedCellKeys.has(positionKey(position)));
+    const destination = candidates.length > 0
+      ? candidates[randomIndex(candidates.length, random)]
+      : origin;
+    if (positionKey(destination) === playerKey) {
+      enemy.position = { ...playerPosition };
+      return { enemies: nextEnemies, collisionEnemyIds: [enemy.id] };
+    }
+    plannedPositions.set(enemy.id, { ...destination });
+    occupiedCellKeys.add(positionKey(destination));
+  }
+
+  for (const enemy of nextEnemies) {
+    enemy.position = plannedPositions.get(enemy.id) ?? enemy.position;
+  }
+  return { enemies: nextEnemies, collisionEnemyIds: [] };
 }
 
 export function awarenessSymbol(awareness: MapEnemyAwareness) {

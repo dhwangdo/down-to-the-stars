@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   advanceMapEnemies,
   chebyshevDistance,
+  clearMapEnemiesNear,
   createMapEnemyWorld,
   isInPlayerVision,
   MAP_ENEMY_SPAWN_CHANCE,
@@ -126,6 +127,118 @@ test("an alerted enemy moves diagonally when that lowers L infinity distance", (
   assert.equal(chebyshevDistance(result.enemies[0].position, { x: 2, y: 2 }), 1);
 });
 
+test("bosses stay alerted and stationary while still colliding with the player", () => {
+  const boss = {
+    id: "boss",
+    position: { x: 0, y: 0 },
+    encounterIndex: 14,
+    awareness: "alerted",
+    isBoss: true,
+  };
+  const result = advanceMapEnemies(
+    [boss],
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    alwaysWalkable,
+    () => 0,
+  );
+  assert.deepEqual(result.enemies[0].position, { x: 0, y: 0 });
+  assert.deepEqual(result.collisionEnemyIds, ["boss"]);
+});
+
+test("an alerted enemy follows an eight-direction distance field around terrain", () => {
+  const enemy = {
+    id: "hunter",
+    position: { x: 0, y: 0 },
+    encounterIndex: 0,
+    awareness: "alerted",
+  };
+  const result = advanceMapEnemies(
+    [enemy],
+    { x: 0, y: 0 },
+    { x: 3, y: 1 },
+    ({ x, y }) => !(x === 1 && y >= -1 && y <= 1),
+    () => 0,
+    new Set(),
+    1,
+    { minX: -2, maxX: 4, minY: -3, maxY: 3 },
+  );
+  assert.deepEqual(result.enemies[0].position, { x: 0, y: 1 });
+});
+
+test("alerted movement assignment maximizes the number of enemies that get closer", () => {
+  const walkable = new Set(["1:-1", "1:1", "2:-1", "2:0", "3:0"]);
+  const enemies = [
+    { id: "flexible", position: { x: 1, y: -1 }, encounterIndex: 0, awareness: "alerted" },
+    { id: "constrained", position: { x: 1, y: 1 }, encounterIndex: 1, awareness: "alerted" },
+  ];
+  const result = advanceMapEnemies(
+    enemies,
+    { x: 1, y: 0 },
+    { x: 3, y: 0 },
+    (position) => walkable.has(`${position.x}:${position.y}`),
+    randomValues(0.9, 0, 0.9, 0),
+    new Set(),
+    1,
+    { minX: 0, maxX: 3, minY: -2, maxY: 2 },
+  );
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 2, y: -1 }, { x: 2, y: 0 }]);
+});
+
+test("an alerted enemy can reserve a moving alerted enemy's vacated cell", () => {
+  const corridor = new Set(["0:0", "1:0", "2:0", "3:0"]);
+  const enemies = [
+    { id: "back", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "alerted" },
+    { id: "front", position: { x: 1, y: 0 }, encounterIndex: 1, awareness: "alerted" },
+  ];
+  const result = advanceMapEnemies(
+    enemies,
+    { x: 1, y: 0 },
+    { x: 3, y: 0 },
+    (position) => corridor.has(`${position.x}:${position.y}`),
+    randomValues(0, 0.9, 0),
+    new Set(),
+    1,
+    { minX: 0, maxX: 3, minY: 0, maxY: 0 },
+  );
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 1, y: 0 }, { x: 2, y: 0 }]);
+});
+
+test("awake enemies block alerted distance-field planning even if they later move", () => {
+  const corridor = new Set(["0:0", "1:0", "2:0", "3:0"]);
+  const enemies = [
+    { id: "hunter", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "alerted" },
+    { id: "wanderer", position: { x: 1, y: 0 }, encounterIndex: 1, awareness: "awake" },
+  ];
+  const result = advanceMapEnemies(
+    enemies,
+    { x: 1, y: 0 },
+    { x: 3, y: 0 },
+    (position) => corridor.has(`${position.x}:${position.y}`),
+    randomValues(0, 0.9, 0.9, 0),
+    new Set(),
+    1,
+    { minX: 0, maxX: 3, minY: 0, maxY: 0 },
+  );
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 0, y: 0 }, { x: 2, y: 0 }]);
+});
+
+test("a planned player collision cancels every other enemy movement", () => {
+  const enemies = [
+    { id: "collider", position: { x: 1, y: 0 }, encounterIndex: 0, awareness: "alerted" },
+    { id: "other", position: { x: 1, y: 2 }, encounterIndex: 1, awareness: "alerted" },
+  ];
+  const result = advanceMapEnemies(
+    enemies,
+    { x: 1, y: 1 },
+    { x: 2, y: 0 },
+    alwaysWalkable,
+    randomValues(0.9, 0, 0.9, 0),
+  );
+  assert.deepEqual(result.collisionEnemyIds, ["collider"]);
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 2, y: 0 }, { x: 1, y: 2 }]);
+});
+
 test("an alerted enemy has a 90 percent chance to move closer", () => {
   const enemy = {
     id: "hunter",
@@ -219,4 +332,16 @@ test("enemies cannot overlap when moving onto the player in the same turn", () =
   );
   assert.deepEqual(result.collisionEnemyIds, ["first"]);
   assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 1, y: 1 }, { x: 0, y: 2 }]);
+});
+
+test("portal landing clears the player's five by five area", () => {
+  const world = {
+    enemies: [
+      { id: "center", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "sleeping" },
+      { id: "edge", position: { x: 2, y: -2 }, encounterIndex: 1, awareness: "awake" },
+      { id: "outside", position: { x: 3, y: 0 }, encounterIndex: 2, awareness: "alerted" },
+    ],
+  };
+  const cleared = clearMapEnemiesNear(world, { x: 0, y: 0 });
+  assert.deepEqual(cleared.enemies.map((enemy) => enemy.id), ["outside"]);
 });
