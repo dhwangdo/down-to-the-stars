@@ -1763,6 +1763,21 @@ export default function Home() {
     ? DEBUG_PLAYER_HP
     : MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0) + healthShrineMaxHpBonus;
   const maxPlayerHp = blessings.includes("forbiddenKnowledge") ? 20 : calculatedMaxPlayerHp;
+  useEffect(() => {
+    if (runPlayerHp > maxPlayerHp) {
+      runPlayerHpRef.current = maxPlayerHp;
+      // This state correction must happen immediately when the maximum decreases.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRunPlayerHp(maxPlayerHp);
+    } else if (runPlayerHpRef.current > maxPlayerHp) {
+      runPlayerHpRef.current = maxPlayerHp;
+    }
+    if (game.playerHp > maxPlayerHp) {
+      setGame((current) => current.playerHp > maxPlayerHp
+        ? { ...current, playerHp: maxPlayerHp }
+        : current);
+    }
+  }, [game.playerHp, maxPlayerHp, runPlayerHp]);
   const blessingVisionBonus = (blessings.includes("vision") ? 1 : 0) + (blessings.includes("bioluminescence") ? 2 : 0);
   const mindEyeVisionBonus = mindEyeMovesRemaining > 0 ? 2 : 0;
   const visionHorizontalRadius = MAP_PLAYER_VISION_HORIZONTAL_RADIUS + blessingVisionBonus + mindEyeVisionBonus;
