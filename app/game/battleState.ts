@@ -56,6 +56,10 @@ export type GameState = {
   doubleNextAttack: boolean;
   starsSpent: number;
   reflectDamage: number;
+  playerThorns: number;
+  highlanderActive: boolean;
+  blacksmithForgeUsedThisTurn: boolean;
+  clairvoyanceActive: boolean;
   toxicSlimeAdded: boolean;
   extraTurns: number;
   deckEditions: DeckEdition[];
@@ -81,6 +85,7 @@ export function buildPiles(
   rareCardsFaceUp = false,
   fixedPileCount?: number,
   evenDeal = false,
+  randomFaceUpChance = 0,
 ): Card[][] {
   const pileCount = fixedPileCount ?? Math.ceil(cards.length / cardsPerPile) + extraEmptyPiles;
   const dealtPiles = evenDeal
@@ -89,7 +94,7 @@ export function buildPiles(
   return dealtPiles.map((sourcePile, pileIndex) => {
     const pile = sourcePile.map((card) => ({
       ...card,
-      revealed: (firstPileFaceUp && pileIndex === 0) || (rareCardsFaceUp && card.rarity === "rare"),
+      revealed: (firstPileFaceUp && pileIndex === 0) || (rareCardsFaceUp && card.rarity === "rare") || Math.random() < randomFaceUpChance,
     }));
     if (pile.length > 0) pile[pile.length - 1].revealed = true;
     return pile;
@@ -204,6 +209,10 @@ export function waitingState(
     doubleNextAttack: false,
     starsSpent: 0,
     reflectDamage: 0,
+    playerThorns: 0,
+    highlanderActive: false,
+    blacksmithForgeUsedThisTurn: false,
+    clairvoyanceActive: false,
     toxicSlimeAdded: false,
     extraTurns: 0,
     deckEditions: [],
@@ -218,6 +227,7 @@ export function dealtState(
   deck = createDeck(),
   enemies: EnemyState[] = createSewerEncounter(),
   deckEditions: DeckEdition[] = [],
+  randomFaceUpChance = 0,
 ): GameState {
   const preparedDeck = prepareDeckForPiles(deck);
   const initialPiles = buildPiles(
@@ -226,6 +236,9 @@ export function dealtState(
     deckEditions.includes("transparent"),
     deckEditions.includes("roomy") ? 1 : 0,
     deckEditions.includes("golden"),
+    undefined,
+    false,
+    randomFaceUpChance,
   );
   const encounterTokens = enemies.some((enemy) => enemy.variant === "goblin")
     ? [createRelicCard(-10000)]

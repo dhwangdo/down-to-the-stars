@@ -16,13 +16,14 @@ export function enemyDamageBeforeBlock(
   physicalResistance = 0,
   magicResistance = 0,
   vulnerability = 0,
+  vulnerabilityMultiplier = 2,
 ) {
-  return reduceEnemyDamageByResistance(
+  return Math.floor(reduceEnemyDamageByResistance(
     damage,
     damageType,
     physicalResistance,
     magicResistance,
-  ) * (vulnerability > 0 ? 2 : 1);
+  ) * (vulnerability > 0 ? vulnerabilityMultiplier : 1));
 }
 
 export function resolveEnemyHitAgainstPlayer({
@@ -34,6 +35,7 @@ export function resolveEnemyHitAgainstPlayer({
   vulnerability = 0,
   damageTakenMultiplier = 1,
   invulnerable = false,
+  vulnerabilityMultiplier = 2,
 }: {
   damage: number;
   damageType: EnemyDamageType;
@@ -43,6 +45,7 @@ export function resolveEnemyHitAgainstPlayer({
   vulnerability?: number;
   damageTakenMultiplier?: number;
   invulnerable?: boolean;
+  vulnerabilityMultiplier?: number;
 }) {
   const transformedDamage = enemyDamageBeforeBlock(
     damage,
@@ -50,6 +53,7 @@ export function resolveEnemyHitAgainstPlayer({
     physicalResistance,
     magicResistance,
     vulnerability,
+    vulnerabilityMultiplier,
   );
   const blocked = invulnerable ? 0 : Math.min(transformedDamage, block);
   return {

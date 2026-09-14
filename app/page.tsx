@@ -183,6 +183,16 @@ import {
 } from "./game/deckEditorRules";
 import { addResistance, addVulnerability, decayThenAddVulnerability } from "./game/statuses";
 import {
+  BLESSING_INFO,
+  hasUniqueCardEffects,
+  resolveLethalDamage,
+  rollBlessingOffers as createBlessingOffers,
+  rollGamblingBlessings,
+  shouldPreserveTicket,
+  type BlessingId,
+  type BlessingOfferId,
+} from "./game/blessingRules";
+import {
   beginTelemetryBattle,
   beginTelemetryRun,
   createTelemetryRecorder,
@@ -202,7 +212,6 @@ type Phase = "drawing" | "playing" | "discarding" | "enemy-turn" | "resolving";
 type Screen = "map" | "battle";
 type DeckEditorArea = DeckEditorCardArea;
 type TicketDropArea = "deck" | "inventory" | "floor";
-type BlessingId = "vision" | "lightStep" | "sturdy" | "greed" | "bag" | "athlete" | "luck" | "deckSize" | "ninja";
 type SavedRunState = {
   playerName: string;
   runPlayerHp: number;
@@ -232,8 +241,7 @@ type SavedRunState = {
   roomShops: Record<string, ShopOffer[]>;
   blessings: BlessingId[];
   blessingRerollCost: number;
-  athleteCooldown: number;
-  athletePrepared: boolean;
+  oneUpUsed: boolean;
   gold: number;
   nextCardId: number;
   nextConsumableId: number;
@@ -823,17 +831,6 @@ const COMMIT_DATE = process.env.NEXT_PUBLIC_COMMIT_DATE ?? "unknown";
 const RESET_HOLD_DURATION_MS = 1_500;
 const INVENTORY_CAPACITY = 12;
 const MAX_OWNED_DECKS = 3;
-const BLESSING_INFO: Record<BlessingId, { name: string; description: string }> = {
-  vision: { name: "시야 확장", description: "시야가 7×7로 늘어납니다." },
-  lightStep: { name: "가벼운 걸음", description: "적의 인식 확률이 절반이 됩니다." },
-  sturdy: { name: "튼튼함", description: "최대 체력이 20 증가합니다." },
-  greed: { name: "탐욕스러움", description: "골드 획득량이 2배가 됩니다." },
-  bag: { name: "가방 업그레이드", description: "인벤토리 +12칸, 덱 슬롯 +1" },
-  athlete: { name: "운동선수", description: "30턴마다 이동 1회가 턴을 소모하지 않습니다." },
-  luck: { name: "행운", description: "덱·티켓·에디션 확률 +10%p" },
-  deckSize: { name: "덱 크기 +5", description: "모든 덱 최대 장수 +5" },
-  ninja: { name: "닌자", description: "잠든 적과 전투 시 아드레날린 1장을 얻습니다." },
-};
 const MAP_WORLD_MARGIN_X = 5;
 const MAP_WORLD_MARGIN_Y = 5;
 const MAP_RENDER_COLUMNS = MAP_COLUMNS + MAP_WORLD_MARGIN_X * 2;
@@ -1137,6 +1134,7 @@ function EnemyIntentIcons({
   magicResistance,
   physicalVulnerability,
   magicVulnerability,
+  vulnerabilityMultiplier,
 }: {
   action: EnemyAction;
   strength: number;
@@ -1146,6 +1144,7 @@ function EnemyIntentIcons({
   magicResistance: number;
   physicalVulnerability: number;
   magicVulnerability: number;
+  vulnerabilityMultiplier: number;
 }) {
   const effectDescriptions = enemyIntentEffectDescription(action, firstActionCompleted);
   const attackTypes = action.attacks.flatMap((attack) => Array.from(
@@ -1161,6 +1160,7 @@ function EnemyIntentIcons({
       physicalResistance,
       magicResistance,
       damageType === "physical" ? physicalVulnerability : magicVulnerability,
+      vulnerabilityMultiplier,
     );
     return Array.from({ length: attack.hits ?? 1 }, (_, hitIndex) => (
       <span
@@ -1663,11 +1663,11 @@ export default function Home() {
   }, [battleThemeColors.outer, debugMode, screen]);
   const [shopOpen, setShopOpen] = useState(false);
   const [blessingOpen, setBlessingOpen] = useState(false);
-  const [blessingOffers, setBlessingOffers] = useState<BlessingId[]>([]);
+  const [blessingOffers, setBlessingOffers] = useState<BlessingOfferId[]>([]);
   const [blessings, setBlessings] = useState<BlessingId[]>([]);
-  const [blessingRerollCost, setBlessingRerollCost] = useState(50);
-  const [athleteCooldown, setAthleteCooldown] = useState(0);
-  const [athletePrepared, setAthletePrepared] = useState(false);
+  const [blessingRerollCost, setBlessingRerollCost] = useState(5);
+  const [oneUpUsed, setOneUpUsed] = useState(false);
+  const oneUpUsedRef = useRef(false);
   const [activeShopRoom, setActiveShopRoom] = useState<string | null>(null);
   const [shopMessage, setShopMessage] = useState("필요한 물건을 골라보세요.");
   const [gold, setGold] = useState(0);
@@ -1759,11 +1759,14 @@ export default function Home() {
   const deckCards = activeDeck?.cards ?? [];
   const inventoryCapacity = INVENTORY_CAPACITY + (blessings.includes("bag") ? 12 : 0);
   const maxOwnedDecks = MAX_OWNED_DECKS + (blessings.includes("bag") ? 1 : 0);
-  const maxPlayerHp = debugMode
+  const calculatedMaxPlayerHp = debugMode
     ? DEBUG_PLAYER_HP
     : MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0) + healthShrineMaxHpBonus;
-  const visionHorizontalRadius = mindEyeMovesRemaining > 0 ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
-  const visionVerticalRadius = mindEyeMovesRemaining > 0 ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
+  const maxPlayerHp = blessings.includes("forbiddenKnowledge") ? 20 : calculatedMaxPlayerHp;
+  const blessingVisionBonus = (blessings.includes("vision") ? 1 : 0) + (blessings.includes("bioluminescence") ? 2 : 0);
+  const mindEyeVisionBonus = mindEyeMovesRemaining > 0 ? 2 : 0;
+  const visionHorizontalRadius = MAP_PLAYER_VISION_HORIZONTAL_RADIUS + blessingVisionBonus + mindEyeVisionBonus;
+  const visionVerticalRadius = MAP_PLAYER_VISION_VERTICAL_RADIUS + blessingVisionBonus + mindEyeVisionBonus;
   const editingDeck = ownedDecks.find((deck) => deck.id === deckEditorDeckId) ?? activeDeck;
 
   const ensureTelemetryRun = () => {
@@ -1935,7 +1938,8 @@ export default function Home() {
       return { ...deck, cards };
     }));
   };
-  const inventoryItemCount = inventoryCards.length + inventoryConsumables.length;
+  const inventoryItemCount = inventoryCards.length + inventoryConsumables.filter((item) =>
+    !blessings.includes("lightTicket") || item.type === "cardPack").length;
   const pendingInventoryCardCount = pendingRemovedCards.filter((card) => pendingRemovedCardAreas[card.id] === "inventory").length;
   const deckEditorInventoryItemCount = inventoryItemCount + pendingInventoryCardCount;
   const deckEditorErrorMessage = /불가능|가득|더 이상|반드시|이하로 줄여야/.test(deckEditorMessage)
@@ -2142,6 +2146,11 @@ export default function Home() {
         : Math.min(1, rareChance + 0.02);
       return card;
     });
+    if (blessings.includes("packInsurance") && !cards.some((card) => card.rarity === "rare")) {
+      const last = cards.at(-1)!;
+      cards[cards.length - 1] = { ...randomItem(RARE_CARD_POOL), id: last.id, revealed: false };
+      rareChance = .05;
+    }
     ensureTelemetryRun();
     cards.forEach((card) => recordTelemetryCardAcquired(telemetry, telemetryCardSnapshot(card), "card-pack"));
     rareCardDropChanceRef.current = rareChance;
@@ -2440,9 +2449,10 @@ export default function Home() {
     previousEnemies: typeof mapEnemyWorld.enemies = [],
     baseSeenRooms?: ReadonlySet<string> | null,
   ) => {
-    const mindEyeActive = mindEyeMovesRemainingRef.current > 0;
-    const horizontalRadius = mindEyeActive ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_HORIZONTAL_RADIUS;
-    const verticalRadius = mindEyeActive ? 4 : blessings.includes("vision") ? 3 : MAP_PLAYER_VISION_VERTICAL_RADIUS;
+    const blessingBonus = (blessings.includes("vision") ? 1 : 0) + (blessings.includes("bioluminescence") ? 2 : 0);
+    const mindEyeBonus = mindEyeMovesRemainingRef.current > 0 ? 2 : 0;
+    const horizontalRadius = MAP_PLAYER_VISION_HORIZONTAL_RADIUS + blessingBonus + mindEyeBonus;
+    const verticalRadius = MAP_PLAYER_VISION_VERTICAL_RADIUS + blessingBonus + mindEyeBonus;
     const visibleKeys = visibleMapRoomKeys(position, seed, horizontalRadius, verticalRadius);
     setSeenRooms((current) => new Set([...(baseSeenRooms ?? current), ...visibleKeys]));
     setMapEnemyCellMemory((current) => updateEnemyCellMemory(current, enemies, visibleKeys, previousEnemies));
@@ -2505,10 +2515,22 @@ export default function Home() {
       battleDeck.cards,
       battleEnemies.map(applyPlayerTurnStart),
       battleDeck.editions,
+      blessings.includes("clairvoyance") ? .25 : 0,
     );
-    const nextGame = blessings.includes("ninja") && encounters.some((encounter) => encounter.awareness === "sleeping")
-      ? { ...dealtGame, hand: [...dealtGame.hand, { ...createAdrenalineCard(), id: nextCardIdRef.current++ }] }
-      : dealtGame;
+    const highlanderActive = blessings.includes("highlander") && hasUniqueCardEffects(battleDeck.cards);
+    const nextGame = {
+      ...dealtGame,
+      hand: blessings.includes("ninja") && encounters.some((encounter) => encounter.awareness === "sleeping")
+        ? [...dealtGame.hand, { ...createAdrenalineCard(), id: nextCardIdRef.current++ }]
+        : dealtGame.hand,
+      strength: dealtGame.strength + (blessings.includes("swordShield") ? 1 : 0),
+      agility: dealtGame.agility + (blessings.includes("swordShield") ? 1 : 0),
+      stars: dealtGame.stars + (blessings.includes("binaryStars") ? 2 : 0) + (highlanderActive ? 1 : 0),
+      energy: dealtGame.energy + (blessings.includes("glassCannon") ? 1 : 0),
+      playerThorns: blessings.includes("thornCoat") ? 5 : 0,
+      highlanderActive,
+      clairvoyanceActive: blessings.includes("clairvoyance"),
+    };
     const goblin = battleEnemies.find((enemy) => enemy.variant === "goblin");
     const goblinRelic = nextGame.piles[0]?.find((card) => card.effect === "relic" && card.enemyToken);
     if (goblin && goblinRelic) pendingPileTokenSourcesRef.current.set(goblinRelic.id, goblin.id);
@@ -2633,40 +2655,98 @@ export default function Home() {
     void position;
   };
 
-  const rollBlessingOffers = (owned = blessings) => {
-    const available = (Object.keys(BLESSING_INFO) as BlessingId[]).filter((id) => !owned.includes(id));
-    return [...available].sort(() => Math.random() - .5).slice(0, 3);
+  const rollBlessingOffers = (owned = blessings) => createBlessingOffers(owned);
+  const grantConsumables = (type: ConsumableType, count: number, ticketsAreFree = blessings.includes("lightTicket")) => {
+    const items = Array.from({ length: count }, () => nextConsumable(type));
+    const usedSlots = inventoryCards.length + inventoryConsumablesRef.current.filter((item) =>
+      !ticketsAreFree || item.type === "cardPack").length;
+    const inventoryCount = ticketsAreFree && type !== "cardPack"
+      ? items.length
+      : Math.min(items.length, Math.max(0, inventoryCapacity - usedSlots));
+    const inventoryItems = items.slice(0, inventoryCount);
+    const floorItems = items.slice(inventoryCount);
+    if (inventoryItems.length > 0) {
+      const nextInventory = [...inventoryConsumablesRef.current, ...inventoryItems];
+      inventoryConsumablesRef.current = nextInventory;
+      setInventoryConsumables(nextInventory);
+    }
+    if (floorItems.length > 0) {
+      const roomKey = mapRoomKey(mapPosition);
+      setRoomConsumableDrops((current) => ({ ...current, [roomKey]: [...(current[roomKey] ?? []), ...floorItems] }));
+    }
+  };
+  const applyAcquiredBlessing = (blessing: BlessingId, acquiredTogether: readonly BlessingId[] = []) => {
+    if (blessing === "sturdy") {
+      const nextHp = blessings.includes("forbiddenKnowledge") || acquiredTogether.includes("forbiddenKnowledge")
+        ? Math.min(20, runPlayerHpRef.current)
+        : runPlayerHpRef.current + 20;
+      runPlayerHpRef.current = nextHp;
+      setRunPlayerHp(nextHp);
+    }
+    if (blessing === "forbiddenKnowledge") {
+      runPlayerHpRef.current = Math.min(20, runPlayerHpRef.current);
+      setRunPlayerHp((current) => Math.min(20, current));
+    }
+    if (blessing === "vision" || blessing === "bioluminescence") {
+      const allOwned = new Set([...blessings, ...acquiredTogether, blessing]);
+      const bonus = (allOwned.has("vision") ? 1 : 0) + (allOwned.has("bioluminescence") ? 2 : 0);
+      setSeenRooms((current) => new Set([...current, ...visibleMapRoomKeys(
+        mapPosition, mapSeed,
+        MAP_PLAYER_VISION_HORIZONTAL_RADIUS + bonus,
+        MAP_PLAYER_VISION_VERTICAL_RADIUS + bonus,
+      )]));
+    }
+    if (blessing === "deckSize") setOwnedDecks((current) => current.map((deck) => ({ ...deck, capacity: deck.capacity + 5 })));
+    const ticketsAreFree = blessings.includes("lightTicket") || acquiredTogether.includes("lightTicket");
+    if (blessing === "bombardier") grantConsumables("bombTicket", 8, ticketsAreFree);
+    if (blessing === "transformer") grantConsumables("transformTicket", 4, ticketsAreFree);
+    if (blessing === "mirror") grantConsumables("cloneTicket", 2, ticketsAreFree);
+    if (blessing === "goldRush") setGold((current) => current + 300);
   };
   const openBlessings = () => {
     setBlessingOffers((current) => current.length > 0 ? current : rollBlessingOffers());
     setBlessingOpen(true);
   };
-  const chooseBlessing = (blessing: BlessingId) => {
-    if (!blessingOffers.includes(blessing) || blessings.includes(blessing)) return;
-    setBlessings((current) => [...current, blessing]);
-    if (blessing === "sturdy") {
-      runPlayerHpRef.current += 20;
-      setRunPlayerHp((current) => current + 20);
+  const chooseBlessing = (blessing: BlessingOfferId) => {
+    if (!blessingOffers.includes(blessing)) return;
+    if (blessing !== "empty" && blessings.includes(blessing)) return;
+    if (blessing !== "empty") {
+      const acquired: BlessingId[] = [blessing];
+      if (blessing === "gambling") {
+        acquired.push(...rollGamblingBlessings([...blessings, blessing]).filter((id): id is BlessingId => id !== "empty"));
+      }
+      setBlessings((current) => [...current, ...acquired.filter((id) => !current.includes(id))]);
+      acquired.forEach((id) => applyAcquiredBlessing(id, acquired));
     }
-    if (blessing === "vision") {
-      setSeenRooms((current) => new Set([...current, ...visibleMapRoomKeys(mapPosition, mapSeed, 2, 2)]));
-    }
-    if (blessing === "deckSize") setOwnedDecks((current) => current.map((deck) => ({ ...deck, capacity: deck.capacity + 5 })));
     setUsedBlessingRooms((current) => new Set(current).add(mapRoomKey(mapPosition)));
     setBlessingOffers([]);
     setBlessingOpen(false);
   };
   const rerollBlessings = () => {
-    if (gold < blessingRerollCost) return;
-    setGold((current) => current - blessingRerollCost);
-    setBlessingRerollCost((current) => current + 10);
+    if (runPlayerHpRef.current < blessingRerollCost) return;
+    const lethal = resolveLethalDamage(
+      runPlayerHpRef.current,
+      blessingRerollCost,
+      maxPlayerHp,
+      blessings.includes("oneUp") && !oneUpUsedRef.current,
+    );
+    runPlayerHpRef.current = lethal.hp;
+    setRunPlayerHp(lethal.hp);
+    if (lethal.usedOneUp) {
+      oneUpUsedRef.current = true;
+      setOneUpUsed(true);
+    }
+    if (lethal.hp === 0) {
+      finishTelemetryRun(telemetry, "lost");
+      setBlessingOpen(false);
+      setGame({ ...waitingState(0, []), status: "lost", message: "축복 리롤의 대가로 쓰러졌습니다." });
+      setPhase("playing");
+      setScreen("battle");
+      return;
+    }
+    setBlessingRerollCost((current) => current + 1);
     setBlessingOffers(rollBlessingOffers());
   };
-  const activateAthlete = () => {
-    if (!blessings.includes("athlete") || athleteCooldown > 0) return;
-    setAthletePrepared((current) => !current);
-  };
-
   const consumeMindEyeMove = () => {
     setMindEyeMovesRemaining((current) => {
       const next = Math.max(0, current - 1);
@@ -2689,6 +2769,7 @@ export default function Home() {
       if (consumable.armedMovesRemaining <= 1) {
         carriedBombExplosions.push({
           id: `carried-bomb-${consumable.id}`,
+          ticketId: consumable.id,
           position: { ...playerPosition },
           movesRemaining: 0,
         });
@@ -2704,6 +2785,25 @@ export default function Home() {
     const explosions = [...bombStep.explosions, ...carriedBombExplosions];
     if (explosions.length === 0) {
       return { world, playerDefeated: false };
+    }
+    if (blessings.includes("healingMileage")) {
+      const nextHp = Math.min(maxPlayerHp, runPlayerHpRef.current + explosions.length * 2);
+      runPlayerHpRef.current = nextHp;
+      setRunPlayerHp(nextHp);
+    }
+    if (blessings.includes("oneMore")) {
+      const retained = explosions.filter(() => shouldPreserveTicket(true));
+      if (retained.length > 0) {
+        setRoomConsumableDrops((current) => {
+          const next = { ...current };
+          retained.forEach((bomb) => {
+            const roomKey = mapRoomKey(bomb.position);
+            const ticket = createConsumable("bombTicket", bomb.ticketId ?? `bomb-retained-${nextConsumableIdRef.current++}`);
+            next[roomKey] = [...(next[roomKey] ?? []), ticket];
+          });
+          return next;
+        });
+      }
     }
 
     const affectedPositions = explosions.flatMap((bomb) =>
@@ -2728,8 +2828,14 @@ export default function Home() {
     const playerHitCount = explosions.filter((bomb) =>
       chebyshevDistance(bomb.position, playerPosition) <= 1).length;
     let playerDefeated = false;
-    if (playerHitCount > 0) {
-      const nextHp = Math.max(0, runPlayerHpRef.current - 20 * playerHitCount);
+    if (playerHitCount > 0 && !blessings.includes("bombardier")) {
+      const life = resolveLethalDamage(runPlayerHpRef.current, 20 * playerHitCount, maxPlayerHp,
+        blessings.includes("oneUp") && !oneUpUsedRef.current);
+      const nextHp = life.hp;
+      if (life.usedOneUp) {
+        oneUpUsedRef.current = true;
+        setOneUpUsed(true);
+      }
       runPlayerHpRef.current = nextHp;
       setRunPlayerHp(nextHp);
       playerDefeated = nextHp === 0;
@@ -2788,7 +2894,6 @@ export default function Home() {
     nextPosition: MapPosition,
     world: MapEnemyWorld,
   ) => {
-    if (athleteCooldown > 0) setAthleteCooldown((current) => Math.max(0, current - 1));
     const roomKey = mapRoomKey(nextPosition);
     // 직접 적을 만난 순간 전투로 전환한다. 그 턴에는 다른 적을 움직이지 않는다.
     const playerCollisionIds = new Set(world.enemies
@@ -2808,7 +2913,7 @@ export default function Home() {
       (position) => isWalkableRoom(effectiveRoomType(position)) && !isSafeAreaPosition(position, mapSeed),
       Math.random,
       playerCollisionIds,
-      blessings.includes("lightStep") ? 0.5 : 1,
+      (blessings.includes("lightStep") ? 0.5 : 1) * (blessings.includes("bioluminescence") ? 1.5 : 1),
       {
         minX: Math.max(DUNGEON_MIN_X, nextPosition.x - MAP_ENEMY_DISTANCE_FIELD_RADIUS),
         maxX: Math.min(DUNGEON_MAX_X, nextPosition.x + MAP_ENEMY_DISTANCE_FIELD_RADIUS),
@@ -2849,13 +2954,14 @@ export default function Home() {
   const useCurrentHealthShrine = () => {
     if (effectiveRoomType(mapPosition) !== "healthShrine") return;
     const roomKey = mapRoomKey(mapPosition);
-    const healAmount = Math.floor(maxPlayerHp * 0.2);
+    const healAmount = blessings.includes("forbiddenKnowledge") ? 0 : Math.floor(maxPlayerHp * 0.2);
     const previousHp = runPlayerHpRef.current;
     const nextHp = Math.min(maxPlayerHp, previousHp + healAmount);
     runPlayerHpRef.current = nextHp;
     setRunPlayerHp(nextHp);
-    setCollapsedHealthShrineRooms((current) => new Set(current).add(roomKey));
-    showMapMessage(`체력을 ${nextHp - previousHp} 회복했습니다. 회복의 성소가 붕괴했습니다.`);
+    const preserved = shouldPreserveTicket(blessings.includes("archaeologist"));
+    if (!preserved) setCollapsedHealthShrineRooms((current) => new Set(current).add(roomKey));
+    showMapMessage(`체력을 ${nextHp - previousHp} 회복했습니다. 회복의 성소가 ${preserved ? "보존되었습니다." : "붕괴했습니다."}`);
     queueRunSave();
   };
 
@@ -2886,8 +2992,9 @@ export default function Home() {
       [roomKey]: [...(current[roomKey] ?? []), ...selectedCards],
     }));
     setDeckSelectionAttention(true);
-    setCollapsedShrineRooms((current) => new Set(current).add(roomKey));
-    setMapMessage(`${selectedCards.map((card) => card.name).join(", ")} 추출 완료. 추출의 성소가 붕괴했습니다.`);
+    const preserved = shouldPreserveTicket(blessings.includes("archaeologist"));
+    if (!preserved) setCollapsedShrineRooms((current) => new Set(current).add(roomKey));
+    setMapMessage(`${selectedCards.map((card) => card.name).join(", ")} 추출 완료. 추출의 성소가 ${preserved ? "보존되었습니다." : "붕괴했습니다."}`);
     setShrineDraggedCardId(null);
     setShrinePendingCardIds([]);
     setShrineDropActive(false);
@@ -2919,18 +3026,6 @@ export default function Home() {
       y: mapPosition.y + deltaY,
     };
     if (!isWalkableRoom(effectiveRoomType(nextPosition))) return;
-    if (athletePrepared) {
-      const bombResult = advanceBombsAfterMovement(nextPosition, mapEnemyWorld);
-      setMapPosition(nextPosition);
-      rememberPlayerVision(nextPosition, mapSeed, bombResult.world.enemies);
-      consumeMindEyeMove();
-      setMapEnemyWorld(bombResult.world);
-      setAthleteCooldown(30);
-      setAthletePrepared(false);
-      if (RUN_SAVE_POLICY.afterEveryMapMove) queueRunSave(RUN_SAVE_POLICY.mapMoveDelayMs);
-      if (!bombResult.playerDefeated) activateRoomFeature(nextPosition);
-      return;
-    }
     const roomKey = mapRoomKey(nextPosition);
     const result = resolveMapStep(mapPosition, nextPosition, mapEnemyWorld);
     const bombResult = advanceBombsAfterMovement(nextPosition, result.world);
@@ -3144,9 +3239,9 @@ export default function Home() {
     setBlessingOpen(false);
     setBlessingOffers([]);
     setBlessings([]);
-    setBlessingRerollCost(50);
-    setAthleteCooldown(0);
-    setAthletePrepared(false);
+    setBlessingRerollCost(5);
+    setOneUpUsed(false);
+    oneUpUsedRef.current = false;
     setActiveShopRoom(null);
     setGold(0);
     setBattleRewards([]);
@@ -3210,8 +3305,8 @@ export default function Home() {
       setRoomShops(state.roomShops);
       setBlessings(state.blessings);
       setBlessingRerollCost(state.blessingRerollCost);
-      setAthleteCooldown(state.athleteCooldown);
-      setAthletePrepared(state.athletePrepared);
+      setOneUpUsed(state.oneUpUsed ?? false);
+      oneUpUsedRef.current = state.oneUpUsed ?? false;
       setGold(state.gold);
       nextCardIdRef.current = state.nextCardId;
       nextConsumableIdRef.current = state.nextConsumableId;
@@ -3256,8 +3351,7 @@ export default function Home() {
       roomShops,
       blessings,
       blessingRerollCost,
-      athleteCooldown,
-      athletePrepared,
+      oneUpUsed,
       gold,
       nextCardId: nextCardIdRef.current,
       nextConsumableId: nextConsumableIdRef.current,
@@ -3267,13 +3361,13 @@ export default function Home() {
     saveAllowedRef.current = saveReady && !playerNameSetupOpen && screen === "map" && !mapTraveling && !deckEditorOpen;
     saveDirtyRef.current = true;
   }, [
-    activeDeckId, athleteCooldown, athletePrepared, blessingRerollCost, blessings,
+    activeDeckId, blessingRerollCost, blessings,
     collapsedHealthShrineRooms, collapsedShrineRooms, deckEditorOpen, defeatedBossRegions,
     destroyedShopRooms, gold, healthShrineMaxHpBonus, inventoryCards, inventoryConsumables,
     mapBombs, mapEnemyCellMemory, mapEnemyWorld, mapPosition, mapSeed, mapTraveling,
     mindEyeMovesRemaining, ownedDecks, playerName, playerNameSetupOpen, rockBombHits,
     roomConsumableDrops, roomDeckDrops, roomDrops, roomShops, runPlayerHp,
-    safeAreaEntrySeenRooms, saveReady, screen, seenRooms, usedBlessingRooms, usedHealRooms,
+    oneUpUsed, safeAreaEntrySeenRooms, saveReady, screen, seenRooms, usedBlessingRooms, usedHealRooms,
   ]);
 
   const saveRunNow = (force = false) => {
@@ -3569,8 +3663,10 @@ export default function Home() {
       : undefined;
     if (source.area === "deck" && !sourceDeck) return false;
     if (target.area === "deck" && !targetDeck) return false;
-    const safeArea = isSafeAreaPosition(mapPosition, mapSeed)
-      && isSafeAreaEditAllowed(mapPosition, mapSeed, defeatedBossRegions);
+    const positionIsSafeArea = isSafeAreaPosition(mapPosition, mapSeed);
+    const safeArea = positionIsSafeArea
+      ? isSafeAreaEditAllowed(mapPosition, mapSeed, defeatedBossRegions)
+      : blessings.includes("forbiddenKnowledge");
     const validation = validateDeckEditorCardMove({
       source,
       target,
@@ -3754,6 +3850,13 @@ export default function Home() {
       floor: roomConsumableDrops[roomKey] ?? [],
     });
     if (!consumed) return false;
+    const preserved = shouldPreserveTicket(blessings.includes("oneMore"));
+    if (blessings.includes("healingMileage")) {
+      const nextHp = Math.min(maxPlayerHp, runPlayerHpRef.current + 2);
+      runPlayerHpRef.current = nextHp;
+      setRunPlayerHp(nextHp);
+    }
+    if (preserved) return true;
     setInventoryConsumables((current) => {
       const next = current.filter((item) => item.id !== ticketId);
       inventoryConsumablesRef.current = next;
@@ -3864,15 +3967,17 @@ export default function Home() {
   };
 
   const consumeMindEyeTicket = (consumableId: string) => {
-    const ticket = inventoryConsumables.find((item) =>
-      item.id === consumableId && item.type === "mindEyeTicket");
-    if (!ticket) return;
-    setInventoryConsumables((current) => current.filter((item) => item.id !== consumableId));
+    const ticket = findTicketById(consumableId, "mindEyeTicket");
+    if (!ticket || !consumeTicketById(ticket.id, "mindEyeTicket")) return;
     closeDeckEditorAfterMapTicket();
     mindEyeMovesRemainingRef.current = 20;
     setMindEyeMovesRemaining(20);
-    setSeenRooms((current) => new Set([...current, ...visibleMapRoomKeys(mapPosition, mapSeed, 4, 4)]));
-    showMapMessage("심안: 20번 이동 동안 9×9 시야를 얻었습니다.");
+    setSeenRooms((current) => new Set([...current, ...visibleMapRoomKeys(
+      mapPosition, mapSeed,
+      MAP_PLAYER_VISION_HORIZONTAL_RADIUS + blessingVisionBonus + 2,
+      MAP_PLAYER_VISION_VERTICAL_RADIUS + blessingVisionBonus + 2,
+    )]));
+    showMapMessage("심안: 20번 이동 동안 시야 거리 +2를 얻었습니다.");
   };
 
   const installArmedFloorBombs = () => {
@@ -3888,6 +3993,7 @@ export default function Home() {
       ...mapBombsRef.current,
       ...armedBombs.map((bomb) => ({
         id: `bomb-${bomb.id}`,
+        ticketId: bomb.id,
         position: { ...mapPosition },
         movesRemaining: bomb.armedMovesRemaining!,
       })),
@@ -3913,11 +4019,10 @@ export default function Home() {
   const cloneConsumableWithTicket = (targetId: string) => {
     if (!pendingCloneTicketId) return;
     const sourceTicket = findTicketById(pendingCloneTicketId, "cloneTicket");
-    const target = inventoryConsumables.find((item) => item.id === targetId);
-    if (!sourceTicket || !target || target.id === sourceTicket.id) return;
+    const target = findTicketById(targetId);
+    if (!sourceTicket || !target || target.id === sourceTicket.id || target.type === "cloneTicket") return;
     if (!consumeTicketById(sourceTicket.id, "cloneTicket")) return;
-    const clone = nextConsumable(target.type);
-    setInventoryConsumables((current) => [...current, clone]);
+    grantConsumables(target.type, 1);
     setPendingCloneTicketId(null);
     setDeckEditorMessage(`${target.name}을(를) 복제했습니다.`);
   };
@@ -4023,9 +4128,10 @@ export default function Home() {
         setDeckEditorMessage("같은 지역에 아직 밝히지 않은 상점·추출의 성소·회복의 성소가 없습니다.");
         return;
       }
+      const mapTicket = findTicketById(consumable.id, "mapTicket");
+      if (!mapTicket || !consumeTicketById(mapTicket.id, "mapTicket")) return;
       closeDeckEditorAfterMapTicket();
       setSeenRooms((current) => new Set([...current, ...revealed.map((position) => mapRoomKey(position))]));
-      setInventoryConsumables((current) => current.filter((item) => item.id !== consumable.id));
       startMapTicketCameraTour(mapPosition, revealed);
       const revealedNames = revealed.map((position) => {
         const type = effectiveRoomType(position);
@@ -4204,12 +4310,16 @@ export default function Home() {
   const transformConsumableWithTicket = (targetId: string) => {
     if (!pendingTransformTicketId || targetId === pendingTransformTicketId) return;
     const sourceTicket = findTicketById(pendingTransformTicketId, "transformTicket");
-    const target = inventoryConsumables.find((item) => item.id === targetId);
+    const target = findTicketById(targetId);
     if (!sourceTicket || !target || target.id === sourceTicket.id || target.type === "cardPack") return;
     const candidates = CONSUMABLE_TYPES.filter((type) => type !== target.type);
     const transformed = nextConsumable(randomItem(candidates));
-    setInventoryConsumables((current) => current
-      .map((item) => item.id === targetId ? transformed : item));
+    setInventoryConsumables((current) => current.map((item) => item.id === targetId ? transformed : item));
+    const roomKey = mapRoomKey(mapPosition);
+    setRoomConsumableDrops((current) => ({
+      ...current,
+      [roomKey]: (current[roomKey] ?? []).map((item) => item.id === targetId ? transformed : item),
+    }));
     consumeTicketById(sourceTicket.id, "transformTicket");
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${target.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
@@ -5006,30 +5116,41 @@ export default function Home() {
           vulnerability: current.playerPhysicalVulnerability,
           damageTakenMultiplier: current.damageTakenMultiplier,
           invulnerable: current.invulnerable,
+          vulnerabilityMultiplier: blessings.includes("vulnerabilityInsurance") ? 1.5 : 2,
         });
         thornsPhysicalBlock = resolvedHit.remainingBlock;
         thornsDamageTaken += resolvedHit.damageTaken;
       });
       const nextPhysicalBlock = card.effect === "mirrorImage" ? rawNextMagicBlock : thornsPhysicalBlock;
       const nextMagicBlock = card.effect === "mirrorImage" ? rawNextPhysicalBlock : rawNextMagicBlock;
-      const nextPhysicalStatus = card.effect === "steelHeart"
+      const nextPhysicalStatus = !blessings.includes("glassCannon") && card.effect === "steelHeart"
         ? addResistance({ resistance: current.playerPhysicalResistance, vulnerability: current.playerPhysicalVulnerability }, card.value)
         : card.effect === "berserk"
           ? addVulnerability({ resistance: current.playerPhysicalResistance, vulnerability: current.playerPhysicalVulnerability }, 2)
-          : isPlateArmorDefense && card.forged
+          : !blessings.includes("glassCannon") && isPlateArmorDefense && card.forged
             ? addResistance({ resistance: current.playerPhysicalResistance, vulnerability: current.playerPhysicalVulnerability }, 1)
-          : isIronWall
+          : !blessings.includes("glassCannon") && isIronWall
             ? addResistance({ resistance: current.playerPhysicalResistance, vulnerability: current.playerPhysicalVulnerability }, IRON_WALL_RESISTANCE)
             : { resistance: current.playerPhysicalResistance, vulnerability: current.playerPhysicalVulnerability };
-      const nextMagicStatus = card.effect === "steelHeart"
+      const nextMagicStatus = !blessings.includes("glassCannon") && card.effect === "steelHeart"
         ? addResistance({ resistance: current.playerMagicResistance, vulnerability: current.playerMagicVulnerability }, card.value)
-        : card.effect === "blessing"
+        : !blessings.includes("glassCannon") && card.effect === "blessing"
           ? addResistance({ resistance: current.playerMagicResistance, vulnerability: current.playerMagicVulnerability }, card.forged ? 2 : 1)
         : { resistance: current.playerMagicResistance, vulnerability: current.playerMagicVulnerability };
       const won = nextEnemies.every((enemy) => enemy.hp === 0);
+      const thornLife = resolveLethalDamage(
+        current.playerHp,
+        thornsDamageTaken,
+        maxPlayerHp,
+        blessings.includes("oneUp") && !oneUpUsedRef.current,
+      );
+      if (thornLife.usedOneUp) {
+        oneUpUsedRef.current = true;
+        setOneUpUsed(true);
+      }
       const nextPlayerHp = card.effect === "ophiuchus"
         ? Math.min(maxPlayerHp, current.playerHp + 5)
-        : Math.max(0, current.playerHp - thornsDamageTaken);
+        : thornLife.hp;
       const canDraw = current.piles.some((pile) => pile.length > 0);
       const drawEachPileResult = card.effect === "drawEachPile" || (card.effect === "fileDraw" && card.forged)
         ? drawFromPiles(current.piles)
@@ -5049,6 +5170,7 @@ export default function Home() {
             current.deckEditions.includes("golden"),
             current.piles.length + 1,
             true,
+            current.clairvoyanceActive ? .25 : 0,
           )
           : [...current.piles.map((pile) => [...pile]), []]
         : pilesAfterCardDraw;
@@ -5798,6 +5920,8 @@ export default function Home() {
       let nextEnemies = current.enemies;
       let nextEnergy = current.energy;
       let nextStars = current.stars - 1;
+      const blacksmithTriggered = forgeApplied && blessings.includes("blacksmith") && !current.blacksmithForgeUsedThisTurn;
+      if (blacksmithTriggered) nextStars += 1;
       let autoDiscard: Card[] = [];
       let autoDraws = 0;
       if (spellStraight) {
@@ -5864,6 +5988,7 @@ export default function Home() {
         energy: nextEnergy,
         stars: nextStars,
         forgeCount: current.forgeCount + (forgeApplied ? 1 : 0),
+        blacksmithForgeUsedThisTurn: current.blacksmithForgeUsedThisTurn || blacksmithTriggered,
         removedFromReshuffleIds: isObsidianForge && targetCard
           ? [...new Set([...current.removedFromReshuffleIds, targetCard.id])]
           : current.removedFromReshuffleIds,
@@ -6026,10 +6151,18 @@ export default function Home() {
         magicResistance: game.playerMagicResistance,
         vulnerability: game.playerMagicVulnerability,
         invulnerable: game.invulnerable,
+        vulnerabilityMultiplier: blessings.includes("vulnerabilityInsurance") ? 1.5 : 2,
       });
       const toxicSlimeDamageTaken = toxicSlimeHit.damageTaken;
       remainingMagicBlock = toxicSlimeHit.remainingBlock;
-      let remainingHp = Math.max(0, game.playerHp - toxicSlimeDamageTaken);
+      let oneUpAvailable = blessings.includes("oneUp") && !oneUpUsedRef.current;
+      const toxicSlimeLife = resolveLethalDamage(game.playerHp, toxicSlimeDamageTaken, maxPlayerHp, oneUpAvailable);
+      let remainingHp = toxicSlimeLife.hp;
+      if (toxicSlimeLife.usedOneUp) {
+        oneUpAvailable = false;
+        oneUpUsedRef.current = true;
+        setOneUpUsed(true);
+      }
       const hpAfterToxicSlime = remainingHp;
       const physicalBlockAfterToxicSlime = remainingPhysicalBlock;
       const magicBlockAfterToxicSlime = remainingMagicBlock;
@@ -6053,9 +6186,10 @@ export default function Home() {
           piles: pilesAfterSlime,
           hand: [],
           discard: discarded,
-          energy: recoverBattleEnergy(game.energy, maximumBattleEnergy(game.deckEditions.includes("rampaging"))),
+          energy: recoverBattleEnergy(game.energy, maximumBattleEnergy(game.deckEditions.includes("rampaging"), blessings.includes("glassCannon") ? 1 : 0)),
           radiancePlayedThisTurn: 0,
-          stars: game.stars + (game.deckEditions.includes("frugal") ? Math.max(0, game.energy) : 0),
+          stars: game.stars + (game.deckEditions.includes("frugal") ? Math.max(0, game.energy) : 0) + (game.highlanderActive ? 1 : 0),
+          blacksmithForgeUsedThisTurn: false,
           starsSpent: 0,
           reflectDamage: 0,
           extraTurns: game.extraTurns - 1,
@@ -6101,6 +6235,7 @@ export default function Home() {
               vulnerability: resolvedAttack.type === "physical" ? physicalStatus.vulnerability : magicStatus.vulnerability,
               damageTakenMultiplier: game.damageTakenMultiplier,
               invulnerable: game.invulnerable,
+              vulnerabilityMultiplier: blessings.includes("vulnerabilityInsurance") ? 1.5 : 2,
             });
             if (game.reflectDamage > 0 && resolvedHit.blocked > 0) {
               reflectedDamage.set(enemy.id, (reflectedDamage.get(enemy.id) ?? 0) + resolvedHit.blocked * game.reflectDamage);
@@ -6108,7 +6243,16 @@ export default function Home() {
             const damage = resolvedHit.damageTaken;
             if (resolvedAttack.type === "physical") remainingPhysicalBlock = resolvedHit.remainingBlock;
             else remainingMagicBlock = resolvedHit.remainingBlock;
-            remainingHp = Math.max(0, remainingHp - damage);
+            const life = resolveLethalDamage(remainingHp, damage, maxPlayerHp, oneUpAvailable);
+            remainingHp = life.hp;
+            if (life.usedOneUp) {
+              oneUpAvailable = false;
+              oneUpUsedRef.current = true;
+              setOneUpUsed(true);
+            }
+            if (game.playerThorns > 0 && resolvedHit.transformedDamage > 0) {
+              reflectedDamage.set(enemy.id, (reflectedDamage.get(enemy.id) ?? 0) + game.playerThorns);
+            }
             if (damage > 0) enemyDamageTaken.set(enemy.id, (enemyDamageTaken.get(enemy.id) ?? 0) + damage);
             steps.push({
               enemy,
@@ -6365,6 +6509,7 @@ export default function Home() {
               game.deckEditions.includes("golden"),
               pilesAfterSlime.length,
               game.evenDealOnReshuffle,
+              game.clairvoyanceActive ? .25 : 0,
             );
             const redraw = drawFromPileIndexes(rebuilt, emptyIndexes);
             return { pilesBeforeDraw: rebuilt, pilesAfterDraw: redraw.piles, hand: redraw.hand };
@@ -6379,9 +6524,10 @@ export default function Home() {
           clearPlan,
           hand: [],
           discard: discarded,
-          energy: recoverBattleEnergy(game.energy, maximumBattleEnergy(game.deckEditions.includes("rampaging"))),
+          energy: recoverBattleEnergy(game.energy, maximumBattleEnergy(game.deckEditions.includes("rampaging"), blessings.includes("glassCannon") ? 1 : 0)),
           radiancePlayedThisTurn: 0,
-          stars: game.stars + (game.deckEditions.includes("frugal") ? Math.max(0, game.energy) : 0),
+          stars: game.stars + (game.deckEditions.includes("frugal") ? Math.max(0, game.energy) : 0) + (game.highlanderActive ? 1 : 0),
+          blacksmithForgeUsedThisTurn: false,
           starsSpent: 0,
           reflectDamage: 0,
           pendingResearchDraw: null,
@@ -6499,7 +6645,8 @@ export default function Home() {
     const currentRoomType = effectiveRoomType(mapPosition);
     const inSafeArea = isSafeAreaPosition(mapPosition, mapSeed);
     const usesSafeAreaDeckRules = inSafeArea
-      && isSafeAreaEditAllowed(mapPosition, mapSeed, defeatedBossRegions);
+      ? isSafeAreaEditAllowed(mapPosition, mapSeed, defeatedBossRegions)
+      : blessings.includes("forbiddenKnowledge");
     const safeAreaRegionIndex = inSafeArea ? getSafeAreaRegionIndex(mapPosition, mapSeed) : null;
     const safeAreaMemoryRestricted = safeAreaRegionIndex !== null && isSafeAreaSealed(safeAreaRegionIndex);
     const canEditDeck = true;
@@ -6931,12 +7078,9 @@ export default function Home() {
         {telemetryMessage && <span className="telemetry-status" role="status" aria-live="polite">{telemetryMessage}</span>}
         {blessings.length > 0 && (
           <aside className="map-blessing-list" aria-label="획득한 축복">
-            {blessings.map((blessing) => blessing === "athlete" ? (
-              <button type="button" key={blessing} className={athletePrepared ? "is-prepared" : ""} onClick={activateAthlete} disabled={athleteCooldown > 0}>
-                <strong>운동선수</strong>
-                <small>{athleteCooldown > 0 ? `쿨타임 ${athleteCooldown}턴` : athletePrepared ? "준비됨 · 다음 이동 무료" : "눌러서 다음 이동 무료"}</small>
-              </button>
-            ) : <span key={blessing}>{BLESSING_INFO[blessing].name}</span>)}
+            {blessings.map((blessing) => (
+              <span key={blessing}>{BLESSING_INFO[blessing].name}{blessing === "oneUp" && oneUpUsed ? " (비활성)" : ""}</span>
+            ))}
           </aside>
         )}
 
@@ -7582,22 +7726,22 @@ export default function Home() {
               <header>
                 <div><h2 id="blessing-title">축복</h2></div>
                 <div className="shop-header-status">
-                  <strong>🪙 {gold}</strong>
+                  <strong>HP {runPlayerHp} / {maxPlayerHp}</strong>
                   <button type="button" onClick={() => setBlessingOpen(false)}>나가기</button>
                 </div>
               </header>
               {blessingOffers.length > 0 ? (
                 <div className="blessing-options">
-                  {blessingOffers.map((blessing) => (
-                    <button type="button" key={blessing} onClick={() => chooseBlessing(blessing)}>
+                  {blessingOffers.map((blessing, index) => (
+                    <button type="button" key={`${blessing}-${index}`} onClick={() => chooseBlessing(blessing)}>
                       <strong>{BLESSING_INFO[blessing].name}</strong>
                       <span>{BLESSING_INFO[blessing].description}</span>
                     </button>
                   ))}
                 </div>
-              ) : <p className="blessing-empty">받을 수 있는 축복을 모두 얻었습니다.</p>}
+              ) : <p className="blessing-empty">축복 후보가 없습니다.</p>}
               {blessingOffers.length > 0 && (
-                <footer><button type="button" className="blessing-reroll" onClick={rerollBlessings} disabled={gold < blessingRerollCost}>🪙 {blessingRerollCost} 리롤</button></footer>
+                <footer><button type="button" className="blessing-reroll" onClick={rerollBlessings} disabled={runPlayerHp < blessingRerollCost}>HP {blessingRerollCost} 리롤</button></footer>
               )}
             </section>
           </div>
@@ -8655,6 +8799,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                           magicResistance={game.playerMagicResistance}
                           physicalVulnerability={game.playerPhysicalVulnerability}
                           magicVulnerability={game.playerMagicVulnerability}
+                          vulnerabilityMultiplier={blessings.includes("vulnerabilityInsurance") ? 1.5 : 2}
                         />
                       )}
                     </div>

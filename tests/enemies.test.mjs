@@ -44,6 +44,16 @@ test("vulnerability transforms each hit before matching block is consumed", () =
   }), { transformedDamage: 24, blocked: 7, damageTaken: 17, remainingBlock: 0 });
 });
 
+test("vulnerability insurance uses 150 percent damage rounded down before block", () => {
+  assert.deepEqual(resolveEnemyHitAgainstPlayer({
+    damage: 11,
+    damageType: "physical",
+    block: 3,
+    vulnerability: 1,
+    vulnerabilityMultiplier: 1.5,
+  }), { transformedDamage: 16, blocked: 3, damageTaken: 13, remainingBlock: 0 });
+});
+
 test("sturdy stance retains half of block remaining after the enemy turn", () => {
   const hit = resolveEnemyHitAgainstPlayer({ damage: 8, damageType: "physical", block: 11 });
   assert.equal(hit.damageTaken, 0);

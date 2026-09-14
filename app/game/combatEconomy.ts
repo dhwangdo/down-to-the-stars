@@ -1,5 +1,5 @@
-export function maximumBattleEnergy(rampaging: boolean) {
-  return rampaging ? 4 : 3;
+export function maximumBattleEnergy(rampaging: boolean, bonus = 0) {
+  return (rampaging ? 4 : 3) + bonus;
 }
 
 export function recoverBattleEnergy(currentEnergy: number, maximumEnergy: number) {

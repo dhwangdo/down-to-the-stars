@@ -2,6 +2,7 @@ import type { GridPosition, MapEnemy } from "./mapEnemies";
 
 export type MapBomb = {
   id: string;
+  ticketId?: string;
   position: GridPosition;
   movesRemaining: number;
 };
