@@ -124,3 +124,14 @@ test("minimum deck size and capacities remain enforced", () => {
     viaExtractionTicket: true,
   }), { allowed: false, reason: "inventory-full" });
 });
+
+test("an inventory extraction ticket can free its occupied slot", () => {
+  assert.deepEqual(validateDeckEditorCardMove({
+    ...baseRequest,
+    target: { area: "inventory" },
+    inventoryItemCount: 10,
+    inventoryCapacity: 10,
+    inventorySlotsFreed: 1,
+    viaExtractionTicket: true,
+  }), { allowed: true, action: "move" });
+});

@@ -59,6 +59,7 @@ import {
   getSpellStraight,
   obsidianDaggerForgeCosts,
 } from "./game/cardEffects";
+import { cardCostAfterForgePlacement } from "./game/forgeRules";
 import { calculateDefenseGain, getDefenseBaseValue } from "./game/defenseRules";
 import {
   canPayEnergyCost,
@@ -100,6 +101,7 @@ import { ticketBasePrice, type TicketType } from "./game/shopRules";
 import {
   consumeTicketById as consumeTicketFromAreas,
   findTicketById as findTicketInAreas,
+  groupConsumables,
 } from "./game/ticketRules";
 import {
   createDeckName,
@@ -3662,11 +3664,15 @@ export default function Home() {
     source,
     target,
     viaExtractionTicket = false,
+    inventorySlotsFreed = 0,
+    beforeCommit,
   }: {
     cardId: number;
     source: DeckEditorCardLocation;
     target: DeckEditorCardLocation;
     viaExtractionTicket?: boolean;
+    inventorySlotsFreed?: number;
+    beforeCommit?: () => boolean;
   }) => {
     const card = findDeckEditorCard(cardId, source);
     if (!card) return false;
@@ -3693,6 +3699,7 @@ export default function Home() {
       targetDeckCapacity: targetDeck?.capacity,
       inventoryItemCount: deckEditorInventoryItemCount,
       inventoryCapacity,
+      inventorySlotsFreed,
       viaExtractionTicket,
     });
     if (!validation.allowed) {
@@ -3701,6 +3708,7 @@ export default function Home() {
       }
       return false;
     }
+    if (beforeCommit && !beforeCommit()) return false;
 
     const roomKey = mapRoomKey(mapPosition);
     if (source.area === "deck") {
@@ -3853,7 +3861,7 @@ export default function Home() {
   const findTicketById = (ticketId: string, type?: ConsumableType) => {
     const roomKey = mapRoomKey(mapPosition);
     return findTicketInAreas(ticketId, type, {
-      inventory: inventoryConsumables,
+      inventory: inventoryConsumablesRef.current,
       floor: roomConsumableDrops[roomKey] ?? [],
     });
   };
@@ -3861,7 +3869,7 @@ export default function Home() {
   const consumeTicketById = (ticketId: string, type: ConsumableType) => {
     const roomKey = mapRoomKey(mapPosition);
     const consumed = consumeTicketFromAreas(ticketId, type, {
-      inventory: inventoryConsumables,
+      inventory: inventoryConsumablesRef.current,
       floor: roomConsumableDrops[roomKey] ?? [],
     });
     if (!consumed) return false;
@@ -3872,11 +3880,9 @@ export default function Home() {
       setRunPlayerHp(nextHp);
     }
     if (preserved) return true;
-    setInventoryConsumables((current) => {
-      const next = current.filter((item) => item.id !== ticketId);
-      inventoryConsumablesRef.current = next;
-      return next;
-    });
+    const nextInventory = [...consumed.inventory];
+    inventoryConsumablesRef.current = nextInventory;
+    setInventoryConsumables(nextInventory);
     setRoomConsumableDrops((current) => ({
       ...current,
       [roomKey]: (current[roomKey] ?? []).filter((item) => item.id !== ticketId),
@@ -4015,20 +4021,43 @@ export default function Home() {
     ]);
   };
 
+  const findCardByIdForTicket = (cardId: number) => {
+    const roomKey = mapRoomKey(mapPosition);
+    return ownedDecks.flatMap((deck) => deck.cards).find((card) => card.id === cardId)
+      ?? inventoryCards.find((card) => card.id === cardId)
+      ?? (roomDrops[roomKey] ?? []).find((card) => card.id === cardId);
+  };
+
+  const grantCardToInventoryOrFloor = (card: Card) => {
+    const usedSlots = inventoryCards.length + inventoryConsumablesRef.current.filter((item) =>
+      !blessings.includes("lightTicket") || item.type === "cardPack").length;
+    if (usedSlots < inventoryCapacity) {
+      setInventoryCards((current) => [...current, card]);
+      return "inventory" as const;
+    }
+    const roomKey = mapRoomKey(mapPosition);
+    setRoomDrops((current) => ({
+      ...current,
+      [roomKey]: [...(current[roomKey] ?? []), card],
+    }));
+    return "floor" as const;
+  };
+
   const cloneCardWithTicket = (card: Card, ticketId = pendingCloneTicketId) => {
     if (!ticketId) return;
     const ticket = findTicketById(ticketId, "cloneTicket");
-    if (!ticket) return;
-    if (card.rarity === "legendary") {
+    const targetCard = findCardByIdForTicket(card.id);
+    if (!ticket || !targetCard) return;
+    if (targetCard.rarity === "legendary") {
       setDeckEditorMessage("전설 카드는 복제할 수 없습니다.");
       return;
     }
     if (!consumeTicketById(ticket.id, "cloneTicket")) return;
-    const clone = { ...card, id: nextCardIdRef.current, revealed: false };
+    const clone = { ...targetCard, id: nextCardIdRef.current, revealed: false };
     nextCardIdRef.current += 1;
-    setInventoryCards((current) => [...current, clone]);
+    const destination = grantCardToInventoryOrFloor(clone);
     setPendingCloneTicketId(null);
-    setDeckEditorMessage(`${card.name}을(를) 복제했습니다.`);
+    setDeckEditorMessage(`${targetCard.name}을(를) 복제했습니다.${destination === "floor" ? " 인벤토리가 가득 차 바닥에 놓았습니다." : ""}`);
   };
 
   const cloneConsumableWithTicket = (targetId: string) => {
@@ -4272,15 +4301,19 @@ export default function Home() {
     if (!deck || !card) return;
     const ticket = findTicketById(ticketId, "extractTicket");
     if (!ticket) return;
+    const ticketFreesInventorySlot = inventoryConsumablesRef.current.some((item) => item.id === ticket.id)
+      && !blessings.includes("lightTicket")
+      && !blessings.includes("oneMore");
     const moved = moveDeckEditorCard({
       cardId,
       source: { area: "deck", deckId },
       target: { area: "inventory" },
       viaExtractionTicket: true,
+      inventorySlotsFreed: ticketFreesInventorySlot ? 1 : 0,
+      beforeCommit: () => consumeTicketById(ticket.id, "extractTicket"),
     });
     if (!moved) return;
     setDeckEditorReleasedCardIds((current) => new Set(current).add(cardId));
-    consumeTicketById(ticket.id, "extractTicket");
     setPendingExtractTicketId(null);
     setDeckEditorMessage(`${card.name}을(를) 덱에서 추출했습니다.`);
   };
@@ -4299,27 +4332,32 @@ export default function Home() {
   const transformCardWithTicket = (card: Card, area: "deck" | "inventory" | "floor", deckId?: string, ticketId = pendingTransformTicketId) => {
     if (!ticketId) return;
     const ticket = findTicketById(ticketId, "transformTicket");
-    if (!ticket) return;
-    const transformed = transformedCard(card);
+    const roomKey = mapRoomKey(mapPosition);
+    const targetCard = area === "deck" && deckId
+      ? ownedDecks.find((deck) => deck.id === deckId)?.cards.find((item) => item.id === card.id)
+      : area === "inventory"
+        ? inventoryCards.find((item) => item.id === card.id)
+        : (roomDrops[roomKey] ?? []).find((item) => item.id === card.id);
+    if (!ticket || !targetCard) return;
+    const transformed = transformedCard(targetCard);
     if (!transformed) {
-      setDeckEditorMessage(card.rarity === "legendary" ? "전설 카드는 변화시킬 수 없습니다." : "변환할 다른 카드가 없습니다.");
+      setDeckEditorMessage(targetCard.rarity === "legendary" ? "전설 카드는 변화시킬 수 없습니다." : "변환할 다른 카드가 없습니다.");
       return;
     }
+    if (!consumeTicketById(ticket.id, "transformTicket")) return;
     if (area === "deck" && deckId) {
-      updateDeckCards(deckId, (current) => current.map((item) => item.id === card.id ? transformed : item));
+      updateDeckCards(deckId, (current) => current.map((item) => item.id === targetCard.id ? transformed : item));
     } else if (area === "inventory") {
-      setInventoryCards((current) => current.map((item) => item.id === card.id ? transformed : item));
+      setInventoryCards((current) => current.map((item) => item.id === targetCard.id ? transformed : item));
     } else {
-      const roomKey = mapRoomKey(mapPosition);
       setRoomDrops((current) => ({
         ...current,
-        [roomKey]: (current[roomKey] ?? []).map((item) => item.id === card.id ? transformed : item),
+        [roomKey]: (current[roomKey] ?? []).map((item) => item.id === targetCard.id ? transformed : item),
       }));
     }
-    consumeTicketById(ticket.id, "transformTicket");
-    setTransformedCardNewIds((current) => new Set(current).add(card.id));
+    setTransformedCardNewIds((current) => new Set(current).add(targetCard.id));
     setPendingTransformTicketId(null);
-    setDeckEditorMessage(`${card.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
+    setDeckEditorMessage(`${targetCard.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
   };
 
   const transformConsumableWithTicket = (targetId: string) => {
@@ -4329,13 +4367,17 @@ export default function Home() {
     if (!sourceTicket || !target || target.id === sourceTicket.id || target.type === "cardPack") return;
     const candidates = CONSUMABLE_TYPES.filter((type) => type !== target.type);
     const transformed = nextConsumable(randomItem(candidates));
-    setInventoryConsumables((current) => current.map((item) => item.id === targetId ? transformed : item));
+    if (!consumeTicketById(sourceTicket.id, "transformTicket")) return;
+    if (inventoryConsumablesRef.current.some((item) => item.id === targetId)) {
+      const nextInventory = inventoryConsumablesRef.current.map((item) => item.id === targetId ? transformed : item);
+      inventoryConsumablesRef.current = nextInventory;
+      setInventoryConsumables(nextInventory);
+    }
     const roomKey = mapRoomKey(mapPosition);
     setRoomConsumableDrops((current) => ({
       ...current,
       [roomKey]: (current[roomKey] ?? []).map((item) => item.id === targetId ? transformed : item),
     }));
-    consumeTicketById(sourceTicket.id, "transformTicket");
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${target.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
   };
@@ -5899,11 +5941,12 @@ export default function Home() {
         const placedCard = {
           ...card,
           baseCost,
-          cost: isExchangeForge && index === 0 && targetCard
-            ? effectiveTargetCost ?? targetCard.cost
-            : card.effect === "plateArmor"
-              ? (card.baseCost ?? 1)
-              : card.cost,
+          cost: cardCostAfterForgePlacement(
+            card,
+            isExchangeForge && index === 0 && targetCard
+              ? effectiveTargetCost ?? targetCard.cost
+              : undefined,
+          ),
           value: daggerForgeCost !== undefined ? card.value + targetCard!.value : card.value,
           forgeCostsCompleted: nextForgeCostsCompleted,
           revealed: drag.source.type === "hand" ? true : card.revealed,
@@ -6767,22 +6810,6 @@ export default function Home() {
       || pendingTransformTicketId === consumable.id
       || consumable.armedMovesRemaining !== undefined
     );
-    const groupConsumables = (consumables: Consumable[]) => Array.from(consumables.reduce((groups, consumable) => {
-      const groupKey = [
-        consumable.type,
-        consumable.name,
-        consumable.description,
-        consumable.armedMovesRemaining ?? "idle",
-        isConsumableSelected(consumable) ? "selected" : "regular",
-      ].join(":");
-      const current = groups.get(groupKey);
-      if (current) {
-        current.consumable = consumable;
-        current.consumableIds.push(consumable.id);
-      }
-      else groups.set(groupKey, { consumable, consumableIds: [consumable.id] });
-      return groups;
-    }, new Map<string, { consumable: Consumable; consumableIds: string[] }>()).values());
     const inventoryConsumableGroups = groupConsumables(inventoryConsumables);
     const floorConsumableGroups = groupConsumables(currentFloorConsumables);
     const deckViewerCards = [...(viewedDeck?.cards ?? [])].sort((left, right) => {

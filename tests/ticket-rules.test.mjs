@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   consumeTicketById,
   findTicketById,
+  groupConsumables,
 } from "../app/game/ticketRules.ts";
 
 const ticket = (id, type) => ({ id, type, name: type, description: type });
@@ -45,4 +46,28 @@ test("missing or wrong-type tickets leave both areas unchanged", () => {
     inventory: [ticket("clone", "cloneTicket")],
     floor: [ticket("transform", "transformTicket")],
   });
+});
+
+test("selecting one ticket does not require splitting an identical ticket stack", () => {
+  const tickets = Array.from({ length: 5 }, (_, index) => ticket(`extract-${index}`, "extractTicket"));
+  const groups = groupConsumables(tickets);
+
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].consumableIds, tickets.map((item) => item.id));
+});
+
+test("consuming a clone ticket before granting a copy keeps the source consumed", () => {
+  const areas = {
+    inventory: [
+      ...Array.from({ length: 4 }, (_, index) => ticket(`clone-${index}`, "cloneTicket")),
+      ...Array.from({ length: 4 }, (_, index) => ticket(`extract-${index}`, "extractTicket")),
+    ],
+    floor: [],
+  };
+  const consumed = consumeTicketById("clone-3", "cloneTicket", areas);
+  assert.ok(consumed);
+  const inventory = [...consumed.inventory, ticket("extract-copy", "extractTicket")];
+
+  assert.equal(inventory.filter((item) => item.type === "cloneTicket").length, 3);
+  assert.equal(inventory.filter((item) => item.type === "extractTicket").length, 5);
 });

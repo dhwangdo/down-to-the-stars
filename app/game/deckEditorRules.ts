@@ -49,6 +49,7 @@ export type DeckEditorMoveRequest = {
   targetDeckCapacity?: number;
   inventoryItemCount: number;
   inventoryCapacity: number;
+  inventorySlotsFreed?: number;
   viaExtractionTicket?: boolean;
 };
 
@@ -62,9 +63,13 @@ export function validateDeckEditorCardMove(request: DeckEditorMoveRequest): Deck
   if (leavesSourceDeck && (request.sourceDeckCardCount ?? 0) <= 1) {
     return { allowed: false, reason: "minimum-deck-size" };
   }
+  const inventoryItemCountAfterMove = Math.max(
+    0,
+    request.inventoryItemCount - (request.inventorySlotsFreed ?? 0),
+  );
   if (request.target.area === "inventory"
     && request.source.area !== "inventory"
-    && request.inventoryItemCount >= request.inventoryCapacity) {
+    && inventoryItemCountAfterMove >= request.inventoryCapacity) {
     return { allowed: false, reason: "inventory-full" };
   }
   if (request.target.area === "deck"

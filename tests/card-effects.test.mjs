@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { SPECIAL_CARD_POOL } from "../app/game/cards.ts";
 import { calculateDefenseGain, getDefenseBaseValue } from "../app/game/defenseRules.ts";
+import { cardCostAfterForgePlacement } from "../app/game/forgeRules.ts";
+
+test("forging old core preserves its zero energy cost", () => {
+  const oldCore = SPECIAL_CARD_POOL.find((card) => card.name === "낡은 노심");
+  assert.ok(oldCore);
+  assert.equal(cardCostAfterForgePlacement(oldCore), 0);
+});
 
 test("fixed defense gains add toughness before applying the defense multiplier", () => {
   const options = { agility: 3, defenseMultiplier: 2 };
