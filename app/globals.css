@@ -18,7 +18,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { min-height: 100%; }
+html, body { min-height: 100%; overflow-x: clip; }
 
 body {
   margin: 0;
@@ -707,7 +707,13 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   background: #78cbea;
   box-shadow: inset 0 0 0 1px rgba(235,250,255,.55), 0 3px 5px rgba(0,0,0,.24);
 }
-.map-room.is-healthShrine {
+.map-room.is-recoveryShrine {
+  border-color: #356044;
+  color: #effff3;
+  background: #658a6e;
+  box-shadow: inset 0 0 0 1px rgba(235,255,240,.45), 0 3px 5px rgba(0,0,0,.24);
+}
+.map-room.is-vitalityShrine {
   border-color: #a44724;
   color: #4d1d0d;
   background: #ee9651;
@@ -1049,7 +1055,8 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .map-room.is-unknown,
 .map-room.is-shop,
 .map-room.is-shrine,
-.map-room.is-healthShrine,
+.map-room.is-recoveryShrine,
+.map-room.is-vitalityShrine,
 .map-room.is-boss,
 .map-room.is-portal,
 .map-room.is-safePortal,
@@ -1391,6 +1398,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   position: fixed;
   z-index: 100;
   inset: 0;
+  overflow: clip;
   display: grid;
   place-items: center;
   padding: 22px;
@@ -4814,6 +4822,17 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   overflow-x: auto;
   overflow-y: hidden;
 }
+
+/* Leave scrollable room after the last item for the fixed preview tooltip. */
+.deck-editor-card-list::after,
+.deck-editor-deck-list::after,
+.deck-editor-floor-cards::after {
+  content: "";
+  flex: 0 0 416px;
+  width: 416px;
+  height: 1px;
+  pointer-events: none;
+}
 .deck-editor-footer { grid-column: 1; grid-row: 4; }
 .inventory-column .deck-editor-empty {
   align-self: center;
@@ -5128,7 +5147,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   position: fixed;
   z-index: 180;
   display: flex;
-  width: min(310px, calc(100vw - 24px));
+  width: 310px;
   max-height: calc(100vh - 24px);
   flex-direction: column;
   gap: 8px;
@@ -5144,7 +5163,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   background: rgba(58,31,37,.96);
   box-shadow: 0 5px 16px rgba(0,0,0,.42);
 }
-.card-keyword-popover strong {
+.card-keyword-popover section > strong {
   display: block;
   margin-bottom: 3px;
   color: #f8d4aa;
@@ -5154,6 +5173,16 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   margin: 0;
   color: #f5eee8;
   font: 12px/1.45 Arial, sans-serif;
+}
+.card-keyword-popover .card-keyword-preview-section {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+}
+.card-keyword-popover .card-keyword-card-preview {
+  --card-w: 136px;
+  --card-h: 191px;
+  flex: none;
 }
 
 .battlefield .player-zone .controls {

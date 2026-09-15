@@ -101,7 +101,7 @@ export type Card = {
   solitaireRule?: SolitaireRule;
   forgeCost?: number;
   forgeCosts?: number[];
-  /** 흑요석 단검의 누적 재련 비용 기록. */
+  /** 흑요석 단검의 누적 재련 단계 기록. */
   forgeCostsCompleted?: number[];
   forgeTargetName?: string;
   forgeAny?: boolean;
@@ -169,7 +169,7 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "battlePlan", rarity: "special", name: "전략가", cost: 1, value: 2, draw: 1, damageType: "physical" },
   { kind: "skill", effect: "plateArmor", rarity: "special", name: "낡은 노심", cost: 0, value: 1, draw: 0, damageType: "physical", forgeCost: 3, exhaust: true },
   { kind: "skill", effect: "plateArmorDefense", rarity: "special", name: "판금 갑옷", cost: 1, value: 8, draw: 0, damageType: "physical", forgeCost: 3 },
-  { kind: "skill", effect: "elimination", rarity: "special", name: "소거법", cost: 0, value: 0, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "elimination", rarity: "special", name: "소거법", cost: 1, value: 0, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "weaponSharpen", rarity: "special", name: "무기 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "armorSharpen", rarity: "special", name: "방어구 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "dash", rarity: "special", name: "질주", cost: 1, value: 0, draw: 0, damageType: "physical", forgeCost: 3 },

@@ -12,16 +12,12 @@ export const IRON_WALL_RESISTANCE = 2;
 
 export type CardKeywordInfo = {
   name: string;
-  description: string;
+  description?: string;
+  preview?: "radiance";
 };
 
 export function cardForgeCount(card: Pick<Card, "forged" | "forgeCostsCompleted">) {
   return card.forgeCostsCompleted?.length ?? (card.forged ? 1 : 0);
-}
-
-export function obsidianDaggerForgeCosts(card: Pick<Card, "effect" | "forged" | "forgeCostsCompleted">) {
-  if (card.effect !== "obsidianDagger") return [];
-  return [cardForgeCount(card) + 1];
 }
 
 export function forgeConditionText(card: Pick<Card, "forgeCost" | "forgeCosts" | "forgeTargetName" | "forgeAny">) {
@@ -75,6 +71,10 @@ const CARD_KEYWORD_DESCRIPTIONS: Record<string, string> = {
   "면역": "지속 중에는 피해를 받지 않습니다.",
 };
 
+const CARD_KEYWORD_PREVIEWS: Record<string, CardKeywordInfo["preview"]> = {
+  "광채": "radiance",
+};
+
 export function getCardKeywordInfos(card: Card): CardKeywordInfo[] {
   const keywords: string[] = [];
   const add = (keyword: string) => {
@@ -101,9 +101,14 @@ export function getCardKeywordInfos(card: Card): CardKeywordInfo[] {
   if (CARD_POOL_STAR_EFFECTS.has(card.effect) || ["grimoire", "meteor", "supernova"].includes(card.effect)) add("★");
   if (["warmUp", "weaponSharpen", "augment", "orion", "combatManual", "relic", "transcend"].includes(card.effect)) add("힘");
   if (["augment", "armorSharpen", "combatManual"].includes(card.effect)) add("강인함");
+  if (["radiance", "lightCluster", "largePrism", "opticsResearch"].includes(card.effect)) add("광채");
   return keywords
-    .map((name) => ({ name, description: CARD_KEYWORD_DESCRIPTIONS[name] }))
-    .filter((keyword): keyword is CardKeywordInfo => Boolean(keyword.description));
+    .map((name) => ({
+      name,
+      description: CARD_KEYWORD_DESCRIPTIONS[name],
+      preview: CARD_KEYWORD_PREVIEWS[name],
+    }))
+    .filter((keyword) => Boolean(keyword.description || keyword.preview));
 }
 
 export function isRuleMatchedPlacement(movingCard: Card, targetCard?: Card) {
@@ -125,12 +130,10 @@ export function canPlaceBySolitaireRule(movingCard: Card, targetCard?: Card) {
 
 export function canForgeCardOnto(movingCard: Card, targetCard?: Card, lawResearchCount = 0, forgeCount = 0) {
   if (!targetCard) return false;
-  const targetCost = cardEnergyCost(targetCard, lawResearchCount, forgeCount);
   if (movingCard.effect === "obsidianDagger") {
-    return targetCost !== undefined
-      && isAttackCard(targetCard)
-      && obsidianDaggerForgeCosts(movingCard).includes(targetCost);
+    return isAttackCard(targetCard);
   }
+  const targetCost = cardEnergyCost(targetCard, lawResearchCount, forgeCount);
   if (movingCard.forged) return false;
   return (targetCost !== undefined && movingCard.forgeCost !== undefined && movingCard.forgeCost === targetCost)
     || (targetCost !== undefined && movingCard.forgeCosts?.includes(targetCost))

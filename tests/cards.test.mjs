@@ -30,6 +30,7 @@ test("current card data keeps key balance values and removed systems absent", ()
     ],
   );
   assert.equal(SPECIAL_CARD_POOL.find((card) => card.name === "별의 방주")?.value, 10);
+  assert.equal(SPECIAL_CARD_POOL.find((card) => card.name === "소거법")?.cost, 1);
   const quickStep = SPECIAL_CARD_POOL.find((card) => card.name === "퀵스텝");
   assert.deepEqual(
     quickStep && { cost: quickStep.cost, rarity: quickStep.rarity, draw: quickStep.draw },
@@ -46,6 +47,7 @@ test("current card data keeps key balance values and removed systems absent", ()
     },
     { effect: "obsidianDagger", rarity: "rare", cost: 0, value: 1 },
   );
+  assert.equal(RARE_CARD_POOL.find((card) => card.name === "초신성")?.value, 3);
   const oldCore = SPECIAL_CARD_POOL.find((card) => card.name === "낡은 노심");
   assert.equal(oldCore?.cost, 0);
   assert.equal(oldCore?.exhaust, true);

@@ -57,7 +57,7 @@ import {
   getCardKeywordInfos,
   getFloodPyramid,
   getSpellStraight,
-  obsidianDaggerForgeCosts,
+  type CardKeywordInfo,
 } from "./game/cardEffects";
 import { cardCostAfterForgePlacement } from "./game/forgeRules";
 import { calculateDefenseGain, getDefenseBaseValue } from "./game/defenseRules";
@@ -227,8 +227,11 @@ type SavedRunState = {
   mapBombs: MapBomb[];
   destroyedShopRooms: string[];
   collapsedShrineRooms: string[];
-  collapsedHealthShrineRooms: string[];
-  healthShrineMaxHpBonus: number;
+  collapsedRecoveryShrineRooms?: string[];
+  collapsedVitalityShrineRooms?: string[];
+  vitalityShrineMaxHpBonus?: number;
+  collapsedHealthShrineRooms?: string[];
+  healthShrineMaxHpBonus?: number;
   usedHealRooms: string[];
   usedBlessingRooms: string[];
   rockBombHits: Record<string, number>;
@@ -1350,13 +1353,13 @@ function CardFace({
       case "economicsResearch":
         return <span>에너지가 -3이 될 때까지 카드를 사용할 수 있습니다. 이 효과는 중첩됩니다.</span>;
       case "opticsResearch":
-        return <span>매 플레이어 턴 시작 시 <strong>광채</strong>를 1장 가져옵니다.</span>;
+        return <span>매 플레이어 턴 시작 시 <strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span>;
       case "radiance":
-        return <span><span className="effect-type damage">피해</span>를 4 줍니다. 이번 턴에 사용한 다른 <strong>광채</strong>마다 피해를 4 더 줍니다.</span>;
+        return <span><span className="effect-type damage">피해</span>를 4 줍니다. 이번 턴에 사용한 다른 <strong className="effect-keyword">광채</strong>마다 피해를 4 더 줍니다.</span>;
       case "lightCluster":
-        return <span><strong>광채</strong>를 1장 가져옵니다.</span>;
+        return <span><strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span>;
       case "largePrism":
-        return <span><strong>광채</strong>를 3장 가져옵니다.</span>;
+        return <span><strong className="effect-keyword">광채</strong>를 3장 가져옵니다.</span>;
       case "lawResearch":
         return <span>내 <strong className="effect-keyword">룰</strong> 카드의 비용이 1 감소합니다. 비용은 0보다 낮아지지 않습니다.</span>;
       case "mirrorImage":
@@ -1400,7 +1403,7 @@ function CardFace({
       case "rock":
         return <span><strong className="effect-keyword">사용 불가</strong>.</span>;
       case "supernova":
-        return <span><span className="effect-star">★★★</span>을 잃습니다. <strong className="effect-keyword">에너지</strong>를 3 얻습니다.</span>;
+        return <span><span className="effect-star">★★</span>을 잃습니다. <strong className="effect-keyword">에너지</strong>를 3 얻습니다.</span>;
       case "combatManual":
         return <span><strong className="effect-keyword">사용 불가</strong>. 손패에 있는 동안 <strong className="effect-keyword">힘</strong>과 <strong className="effect-keyword">강인함</strong>을 2 얻습니다.</span>;
       case "grimoire":
@@ -1449,9 +1452,7 @@ function CardFace({
         {card.effect === "obsidianDagger"
           ? <>
             {cardForgeCount(card) > 0 && <strong className="solitaire-rule forge-rule effect-keyword">재련됨.</strong>}
-            {obsidianDaggerForgeCosts(card).map((cost) => (
-              <strong className="solitaire-rule forge-rule" key={`obsidian-forge-${card.id}-${cost}`}><span className="effect-keyword">재련</span>: [{cost}코스트 공격]</strong>
-            ))}
+            <strong className="solitaire-rule forge-rule"><span className="effect-keyword">재련</span>: [공격]</strong>
           </>
           : card.forged
             ? <strong className="solitaire-rule forge-rule effect-keyword">재련됨.</strong>
@@ -1459,6 +1460,28 @@ function CardFace({
       </>)}</span>
     </>
   );
+}
+
+function CardKeywordSections({ keywords }: { keywords: CardKeywordInfo[] }) {
+  return <>
+    {keywords.map((keyword) => (
+      <section
+        className={keyword.preview ? "card-keyword-preview-section" : undefined}
+        key={keyword.name}
+      >
+        {keyword.preview === "radiance" ? (
+          <div className="card-keyword-card-preview card-face strike physical">
+            <CardFace card={createRadianceCard(-1)} />
+          </div>
+        ) : (
+          <>
+            <strong>{keyword.name}</strong>
+            <p>{keyword.description}</p>
+          </>
+        )}
+      </section>
+    ))}
+  </>;
 }
 
 type DeckEditorCardIconData = Pick<Card, "effect" | "name" | "cost" | "forged" | "colored" | "forgeCostsCompleted">;
@@ -1593,8 +1616,9 @@ export default function Home() {
   const mapBombsRef = useRef<MapBomb[]>([]);
   const [destroyedShopRooms, setDestroyedShopRooms] = useState<Set<string>>(() => new Set());
   const [collapsedShrineRooms, setCollapsedShrineRooms] = useState<Set<string>>(() => new Set());
-  const [collapsedHealthShrineRooms, setCollapsedHealthShrineRooms] = useState<Set<string>>(() => new Set());
-  const [healthShrineMaxHpBonus, setHealthShrineMaxHpBonus] = useState(0);
+  const [collapsedRecoveryShrineRooms, setCollapsedRecoveryShrineRooms] = useState<Set<string>>(() => new Set());
+  const [collapsedVitalityShrineRooms, setCollapsedVitalityShrineRooms] = useState<Set<string>>(() => new Set());
+  const [vitalityShrineMaxHpBonus, setVitalityShrineMaxHpBonus] = useState(0);
   const [shrineOpen, setShrineOpen] = useState(false);
   const [shrineDeckId, setShrineDeckId] = useState("");
   const [shrineDraggedCardId, setShrineDraggedCardId] = useState<number | null>(null);
@@ -1765,7 +1789,7 @@ export default function Home() {
   const maxOwnedDecks = MAX_OWNED_DECKS + (blessings.includes("bag") ? 1 : 0);
   const calculatedMaxPlayerHp = debugMode
     ? DEBUG_PLAYER_HP
-    : MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0) + healthShrineMaxHpBonus;
+    : MAX_PLAYER_HP + (blessings.includes("sturdy") ? 20 : 0) + vitalityShrineMaxHpBonus;
   const maxPlayerHp = blessings.includes("forbiddenKnowledge") ? 20 : calculatedMaxPlayerHp;
   useEffect(() => {
     if (runPlayerHp > maxPlayerHp) {
@@ -1891,7 +1915,8 @@ export default function Home() {
     if (baseType === "boss" && safeRegion !== null && defeatedBossRegions.has(safeRegion)) return "empty";
     if (baseType === "shop" && destroyedShopRooms.has(roomKey)) return "empty";
     if (baseType === "shrine" && collapsedShrineRooms.has(roomKey)) return "empty";
-    if (baseType === "healthShrine" && collapsedHealthShrineRooms.has(roomKey)) return "empty";
+    if (baseType === "recoveryShrine" && collapsedRecoveryShrineRooms.has(roomKey)) return "empty";
+    if (baseType === "vitalityShrine" && collapsedVitalityShrineRooms.has(roomKey)) return "empty";
     if (baseType === "heal" && usedHealRooms.has(roomKey)) return "empty";
     if (baseType === "blessing" && usedBlessingRooms.has(roomKey)) return "empty";
     if (baseType === "rock" && (rockBombHits[roomKey] ?? 0) >= 3) return "empty";
@@ -2969,8 +2994,8 @@ export default function Home() {
     setUsedHealRooms((current) => new Set(current).add(roomKey));
   };
 
-  const useCurrentHealthShrine = () => {
-    if (effectiveRoomType(mapPosition) !== "healthShrine") return;
+  const useCurrentRecoveryShrine = () => {
+    if (effectiveRoomType(mapPosition) !== "recoveryShrine") return;
     const roomKey = mapRoomKey(mapPosition);
     const healAmount = blessings.includes("forbiddenKnowledge") ? 0 : Math.floor(maxPlayerHp * 0.3);
     const previousHp = runPlayerHpRef.current;
@@ -2978,8 +3003,18 @@ export default function Home() {
     runPlayerHpRef.current = nextHp;
     setRunPlayerHp(nextHp);
     const preserved = shouldPreserveTicket(blessings.includes("archaeologist"));
-    if (!preserved) setCollapsedHealthShrineRooms((current) => new Set(current).add(roomKey));
+    if (!preserved) setCollapsedRecoveryShrineRooms((current) => new Set(current).add(roomKey));
     showMapMessage(`체력을 ${nextHp - previousHp} 회복했습니다. 회복의 성소가 ${preserved ? "보존되었습니다." : "붕괴했습니다."}`);
+    queueRunSave();
+  };
+
+  const useCurrentVitalityShrine = () => {
+    if (effectiveRoomType(mapPosition) !== "vitalityShrine") return;
+    const roomKey = mapRoomKey(mapPosition);
+    setVitalityShrineMaxHpBonus((current) => current + 5);
+    const preserved = shouldPreserveTicket(blessings.includes("archaeologist"));
+    if (!preserved) setCollapsedVitalityShrineRooms((current) => new Set(current).add(roomKey));
+    showMapMessage(`최대 체력이 5 증가했습니다. 현재 체력은 변하지 않습니다. 건강의 성소가 ${preserved ? "보존되었습니다." : "붕괴했습니다."}`);
     queueRunSave();
   };
 
@@ -3228,8 +3263,9 @@ export default function Home() {
     setMapBombsSynced([]);
     setDestroyedShopRooms(new Set());
     setCollapsedShrineRooms(new Set());
-    setCollapsedHealthShrineRooms(new Set());
-    setHealthShrineMaxHpBonus(0);
+    setCollapsedRecoveryShrineRooms(new Set());
+    setCollapsedVitalityShrineRooms(new Set());
+    setVitalityShrineMaxHpBonus(0);
     setShrineOpen(false);
     setShrineDraggedCardId(null);
     setShrinePendingCardIds([]);
@@ -3305,8 +3341,10 @@ export default function Home() {
       mapBombsRef.current = state.mapBombs;
       setDestroyedShopRooms(new Set(state.destroyedShopRooms));
       setCollapsedShrineRooms(new Set(state.collapsedShrineRooms));
-      setCollapsedHealthShrineRooms(new Set(state.collapsedHealthShrineRooms));
-      setHealthShrineMaxHpBonus(state.healthShrineMaxHpBonus);
+      const legacyCollapsedHealthShrineRooms = state.collapsedHealthShrineRooms ?? [];
+      setCollapsedRecoveryShrineRooms(new Set(state.collapsedRecoveryShrineRooms ?? legacyCollapsedHealthShrineRooms));
+      setCollapsedVitalityShrineRooms(new Set(state.collapsedVitalityShrineRooms ?? legacyCollapsedHealthShrineRooms));
+      setVitalityShrineMaxHpBonus(state.vitalityShrineMaxHpBonus ?? state.healthShrineMaxHpBonus ?? 0);
       setUsedHealRooms(new Set(state.usedHealRooms));
       setUsedBlessingRooms(new Set(state.usedBlessingRooms));
       setRockBombHits(state.rockBombHits);
@@ -3353,8 +3391,9 @@ export default function Home() {
       mapBombs,
       destroyedShopRooms: [...destroyedShopRooms],
       collapsedShrineRooms: [...collapsedShrineRooms],
-      collapsedHealthShrineRooms: [...collapsedHealthShrineRooms],
-      healthShrineMaxHpBonus,
+      collapsedRecoveryShrineRooms: [...collapsedRecoveryShrineRooms],
+      collapsedVitalityShrineRooms: [...collapsedVitalityShrineRooms],
+      vitalityShrineMaxHpBonus,
       usedHealRooms: [...usedHealRooms],
       usedBlessingRooms: [...usedBlessingRooms],
       rockBombHits,
@@ -3380,8 +3419,9 @@ export default function Home() {
     saveDirtyRef.current = true;
   }, [
     activeDeckId, blessingRerollCost, blessings,
-    collapsedHealthShrineRooms, collapsedShrineRooms, deckEditorOpen, defeatedBossRegions,
-    destroyedShopRooms, gold, healthShrineMaxHpBonus, inventoryCards, inventoryConsumables,
+    collapsedRecoveryShrineRooms, collapsedShrineRooms, collapsedVitalityShrineRooms,
+    deckEditorOpen, defeatedBossRegions,
+    destroyedShopRooms, gold, inventoryCards, inventoryConsumables, vitalityShrineMaxHpBonus,
     mapBombs, mapEnemyCellMemory, mapEnemyWorld, mapPosition, mapSeed, mapTraveling,
     mindEyeMovesRemaining, ownedDecks, playerName, playerNameSetupOpen, rockBombHits,
     roomConsumableDrops, roomDeckDrops, roomDrops, roomShops, runPlayerHp,
@@ -3473,11 +3513,9 @@ export default function Home() {
     if (!keywordHoverRequest) return;
     const timer = window.setTimeout(() => {
       const margin = 12;
-      const width = Math.min(310, Math.max(0, window.innerWidth - margin * 2));
+      const width = 310;
       const offset = 16;
-      const left = keywordHoverRequest.right + offset + width <= window.innerWidth - margin
-        ? keywordHoverRequest.right + offset
-        : Math.max(margin, keywordHoverRequest.right - width - offset);
+      const left = keywordHoverRequest.right + offset;
       const anchorTop = Math.max(margin, keywordHoverRequest.top);
       setHoveredCardKeywords({
         card: keywordHoverRequest.card,
@@ -3540,7 +3578,7 @@ export default function Home() {
     const offset = 18;
     const previewWidth = 136;
     const previewHeight = 191;
-    const previewLeft = Math.max(margin, Math.min(anchorRight + offset, window.innerWidth - previewWidth - margin));
+    const previewLeft = anchorRight + offset;
     const previewTop = Math.max(margin, Math.min(anchorTop + offset, window.innerHeight - previewHeight - margin));
     const previewRight = previewLeft + previewWidth;
     scheduleCardKeywordHover(card, previewRight, previewTop);
@@ -3555,13 +3593,13 @@ export default function Home() {
   const showConsumablePreview = (consumable: Consumable, anchorRight: number, anchorTop: number) => {
     const margin = 12;
     const offset = 18;
-    const previewWidth = 190;
     const previewHeight = 118;
+    const previewLeft = anchorRight + offset;
     setHoveredDeckCard(null);
     clearCardKeywordHover();
     setHoveredConsumable(consumable);
     setDeckPreviewPosition({
-      x: Math.max(margin, Math.min(anchorRight + offset, window.innerWidth - previewWidth - margin)),
+      x: previewLeft,
       y: Math.max(margin, Math.min(anchorTop + offset, window.innerHeight - previewHeight - margin)),
     });
   };
@@ -4163,7 +4201,7 @@ export default function Home() {
         for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
           const position = { x, y };
           const type = effectiveRoomType(position);
-          if ((type === "shop" || type === "shrine" || type === "healthShrine") && !seenRooms.has(mapRoomKey(position))) candidates.push(position);
+          if ((type === "shop" || type === "shrine" || type === "vitalityShrine") && !seenRooms.has(mapRoomKey(position))) candidates.push(position);
         }
       }
       candidates.sort((left, right) => chebyshevDistance(left, mapPosition) - chebyshevDistance(right, mapPosition));
@@ -5089,8 +5127,8 @@ export default function Home() {
       if (card.effect === "endStart" && current.piles.some((pile) => pile.length > 0)) {
         return { ...current, message: "끝의 시작은 모든 파일이 비어 있을 때만 사용할 수 있습니다." };
       }
-      if (card.effect === "supernova" && current.stars < 3) {
-        return { ...current, message: "초신성: ★★★가 필요합니다." };
+      if (card.effect === "supernova" && current.stars < 2) {
+        return { ...current, message: "초신성: ★★가 필요합니다." };
       }
       const isIronRampage = card.effect === "ironRampage";
       const isShockwave = card.effect === "shockwave";
@@ -5312,7 +5350,7 @@ export default function Home() {
         if (card.effect === "starlight") return "별빛: ★ 획득";
         if (card.effect === "augment") return "증강: 힘과 강인함 획득";
         if (card.effect === "relic") return "유물: 도깨비의 힘 -4";
-        if (card.effect === "supernova") return "★★★을 잃습니다 · 에너지를 3 얻습니다";
+        if (card.effect === "supernova") return "★★을 잃습니다 · 에너지를 3 얻습니다";
         return card.name;
       })();
       const drawMessage = card.draw > 0
@@ -5355,7 +5393,7 @@ export default function Home() {
               : card.effect === "flood"
                     ? 2
               : 0
-        ) + grimoireBonus - (card.effect === "supernova" ? 3 : 0),
+        ) + grimoireBonus - (card.effect === "supernova" ? 2 : 0),
         pendingDraws: drawsAdded,
         pendingPileDrawCount,
         pendingDashRandomDraws,
@@ -5927,15 +5965,15 @@ export default function Home() {
         battleLongCardUpdates.set(targetCard.id, nextPiles[targetPileIndex][targetIndex]);
       }
       const placedCards = drag.cards.map((card, index) => {
-        const daggerForgeCost = isObsidianForge && index === 0 ? effectiveTargetCost : undefined;
+        const daggerForgeApplied = isObsidianForge && index === 0;
         const becomesForged = card.effect === "obsidianDagger"
-          ? daggerForgeCost !== undefined
+          ? daggerForgeApplied
           : card.effect === "exchange"
             ? isExchangeForge && index === 0
           : !card.forged && index === 0 && canForgeCardOnto(card, targetCard, lawResearchCount, current.forgeCount);
-        const nextForgeCostsCompleted = daggerForgeCost === undefined
+        const nextForgeCostsCompleted = !daggerForgeApplied
           ? card.forgeCostsCompleted
-          : [...new Set([...(card.forgeCostsCompleted ?? []), daggerForgeCost])];
+          : Array.from({ length: cardForgeCount(card) + 1 }, (_, forgeIndex) => forgeIndex + 1);
         const baseCost = isExchangeForge && index === 0
           ? (card.baseCost ?? card.cost)
           : card.baseCost;
@@ -5948,7 +5986,7 @@ export default function Home() {
               ? effectiveTargetCost ?? targetCard.cost
               : undefined,
           ),
-          value: daggerForgeCost !== undefined ? card.value + targetCard!.value : card.value,
+          value: daggerForgeApplied ? card.value + targetCard!.value : card.value,
           forgeCostsCompleted: nextForgeCostsCompleted,
           revealed: drag.source.type === "hand" ? true : card.revealed,
           forged: card.forged || becomesForged,
@@ -6714,7 +6752,7 @@ export default function Home() {
     const currentFloorConsumables = roomConsumableDrops[currentRoomKey] ?? [];
     const currentFloorDecks = roomDeckDrops[currentRoomKey] ?? [];
     const hasRoomActionNotice = Boolean(mapMessage && !deckEditorOpen)
-      || ["shop", "shrine", "healthShrine", "boss", "blessing", "portal", "safePortal", "heal"].includes(currentRoomType)
+      || ["shop", "shrine", "recoveryShrine", "vitalityShrine", "boss", "blessing", "portal", "safePortal", "heal"].includes(currentRoomType)
       || currentFloorCards.length > 0
       || currentFloorConsumables.length > 0
       || currentFloorDecks.length > 0;
@@ -6947,12 +6985,7 @@ export default function Home() {
         role="tooltip"
         aria-label={`${hoveredCardKeywords.card.name} 키워드 설명`}
       >
-        {getCardKeywordInfos(hoveredCardKeywords.card).map((keyword) => (
-          <section key={keyword.name}>
-            <strong>{keyword.name}</strong>
-            <p>{keyword.description}</p>
-          </section>
-        ))}
+        <CardKeywordSections keywords={getCardKeywordInfos(hoveredCardKeywords.card)} />
       </aside>
     );
 
@@ -7231,8 +7264,10 @@ export default function Home() {
                         ? "상점"
                         : roomType === "shrine"
                           ? "추출의 성소"
-                        : roomType === "healthShrine"
+                        : roomType === "recoveryShrine"
                           ? "회복의 성소"
+                        : roomType === "vitalityShrine"
+                          ? "건강의 성소"
                         : roomType === "boss"
                           ? "보스"
                         : roomType === "blessing"
@@ -7290,8 +7325,10 @@ export default function Home() {
                           ? <span>상점</span>
                           : roomType === "shrine"
                             ? <span>추출의 성소</span>
-                          : roomType === "healthShrine"
+                          : roomType === "recoveryShrine"
                             ? <span>회복의 성소</span>
+                          : roomType === "vitalityShrine"
+                            ? <span>건강의 성소</span>
                           : roomType === "boss"
                             ? <span>보스</span>
                           : roomType === "blessing"
@@ -7543,14 +7580,24 @@ export default function Home() {
                 <small>카드 최대 2장 추출 · 사용 후 붕괴</small>
               </button>
             )}
-            {currentRoomType === "healthShrine" && (
+            {currentRoomType === "recoveryShrine" && (
               <button
                 type="button"
                 className="room-floor-notice room-action-notice is-shrine simple-room-action-notice"
-                onClick={useCurrentHealthShrine}
+                onClick={useCurrentRecoveryShrine}
               >
                 <strong>회복의 성소 이용하기</strong>
                 <small>최대 체력의 30% 회복(버림) · 사용 후 붕괴</small>
+              </button>
+            )}
+            {currentRoomType === "vitalityShrine" && (
+              <button
+                type="button"
+                className="room-floor-notice room-action-notice is-shrine simple-room-action-notice"
+                onClick={useCurrentVitalityShrine}
+              >
+                <strong>건강의 성소 이용하기</strong>
+                <small>최대 체력 +5 · 현재 체력 변화 없음 · 사용 후 붕괴</small>
               </button>
             )}
             {currentRoomType === "blessing" && (
@@ -8470,12 +8517,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
       role="tooltip"
       aria-label={`${hoveredCardKeywords.card.name} 키워드 설명`}
     >
-      {getCardKeywordInfos(hoveredCardKeywords.card).map((keyword) => (
-        <section key={keyword.name}>
-          <strong>{keyword.name}</strong>
-          <p>{keyword.description}</p>
-        </section>
-      ))}
+      <CardKeywordSections keywords={getCardKeywordInfos(hoveredCardKeywords.card)} />
     </aside>
   );
 

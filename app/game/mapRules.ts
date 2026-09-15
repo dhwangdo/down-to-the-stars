@@ -24,7 +24,8 @@ export type RoomType =
   | "blessing"
   | "shop"
   | "shrine"
-  | "healthShrine"
+  | "recoveryShrine"
+  | "vitalityShrine"
   | "boss"
   | "portal"
   | "heal"
@@ -35,7 +36,7 @@ export const ROCK_BARRIER_HEIGHT = 5;
 export const SPECIAL_NODE_CHANCE = 0.005;
 export const SHOP_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
 export const SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / 2;
-export const HEALTH_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
+export const VITALITY_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
 export const PORTAL_NODE_CHANCE = 0.05;
 export const ROCK_CLUSTER_CHANCE = 0.03;
 export const ROCK_CLUSTER_EDGE_CHANCE = 0.05;
@@ -218,7 +219,7 @@ function isNormalDungeonFloor(position: MapPosition, seed: number) {
   const portalEligible = localY === regionHeight(regionIndex) - 1;
   const availableChance = portalEligible ? 1 - PORTAL_NODE_CHANCE : 1;
   return seededRoll(position, seed) >= (
-    SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + HEALTH_SHRINE_NODE_CHANCE
+    SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE
   ) / availableChance;
 }
 
@@ -267,7 +268,7 @@ export function getRoomType(position: MapPosition, seed: number): RoomType {
       && position.x === centerX + SAFE_AREA_CONNECTOR_OFFSET_X
       && position.y === centerY) return "boss";
     if (safeRegion < 3 && position.x === centerX + SAFE_AREA_LEFT_CROSS_CENTER_OFFSET_X) {
-      if (position.y === centerY) return "healthShrine";
+      if (position.y === centerY) return "recoveryShrine";
       if (Math.abs(position.y - centerY) === 1) return "shrine";
     }
     return "empty";
@@ -289,7 +290,7 @@ export function getRoomType(position: MapPosition, seed: number): RoomType {
       const roll = seededRoll(position, seed);
       if (roll < SHOP_NODE_CHANCE / availableChance) return "shop";
       if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE) / availableChance) return "shrine";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + HEALTH_SHRINE_NODE_CHANCE) / availableChance) return "healthShrine";
+      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE) / availableChance) return "vitalityShrine";
       if (!isAdjacentToSafeAreaBoundary(position, seed) && isRockClusterCell(position, seed)) return "rock";
       return "empty";
     }
