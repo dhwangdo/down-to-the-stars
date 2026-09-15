@@ -32,8 +32,10 @@ export type RoomType =
 
 export const REGION_COUNT = 7;
 export const ROCK_BARRIER_HEIGHT = 5;
-export const SHOP_NODE_CHANCE = 0.0025;
-export const SHRINE_NODE_CHANCE = 0.0025;
+export const SPECIAL_NODE_CHANCE = 0.005;
+export const SHOP_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
+export const SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / 2;
+export const HEALTH_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
 export const PORTAL_NODE_CHANCE = 0.05;
 export const ROCK_CLUSTER_CHANCE = 0.03;
 export const ROCK_CLUSTER_EDGE_CHANCE = 0.05;
@@ -215,7 +217,9 @@ function isNormalDungeonFloor(position: MapPosition, seed: number) {
   if (localY === regionHeight(regionIndex) - 1 && isPortalColumn(position.x, regionIndex, seed)) return false;
   const portalEligible = localY === regionHeight(regionIndex) - 1;
   const availableChance = portalEligible ? 1 - PORTAL_NODE_CHANCE : 1;
-  return seededRoll(position, seed) >= (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE) / availableChance;
+  return seededRoll(position, seed) >= (
+    SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + HEALTH_SHRINE_NODE_CHANCE
+  ) / availableChance;
 }
 
 function isRockClusterCell(position: MapPosition, seed: number) {
@@ -285,6 +289,7 @@ export function getRoomType(position: MapPosition, seed: number): RoomType {
       const roll = seededRoll(position, seed);
       if (roll < SHOP_NODE_CHANCE / availableChance) return "shop";
       if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE) / availableChance) return "shrine";
+      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + HEALTH_SHRINE_NODE_CHANCE) / availableChance) return "healthShrine";
       if (!isAdjacentToSafeAreaBoundary(position, seed) && isRockClusterCell(position, seed)) return "rock";
       return "empty";
     }

@@ -1295,10 +1295,12 @@ function CardFace({
         return <span>모든 파일에서 카드를 1장씩 뽑습니다.</span>;
       case "dash":
         return <span>카드를 1장 뽑습니다. 무작위 파일에서 카드를 1장씩 {card.forged ? 3 : "1[3]"}번 뽑습니다.</span>;
+      case "quickStep":
+        return <span>카드를 {card.draw}장 뽑습니다.</span>;
       case "rulerCompass":
         return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span><span className="effect-star">★</span>을 얻습니다.</span></>;
       case "suppression":
-        return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span>막히지 않은 피해와 <strong className="effect-keyword">강인함</strong>만큼 <span className="effect-type physical">방어</span>를 얻습니다.</span></>;
+        return <><span><span className="effect-type damage">피해</span>를 15 줍니다.</span><span>막히지 않은 피해만큼 <span className="effect-type physical">방어</span>를 얻습니다.</span></>;
       case "berserk":
         return <span><strong className="effect-keyword">에너지</strong>를 2 얻습니다. <strong className="effect-keyword">물리 취약</strong>을 2 얻습니다.</span>;
       case "transcend":
@@ -2575,8 +2577,7 @@ export default function Home() {
     playerHp = runPlayerHp,
   ) => {
     battleRewardIsBossRef.current = encounters.some((encounter) => encounter.isBoss === true);
-    const previousDeckId = previousBattleDeckIdRef.current;
-    if (ownedDecks.length > 1 && previousDeckId !== null && activeDeckId !== previousDeckId) {
+    if (ownedDecks.length >= 2) {
       setDeckSelectionAttention(true);
       setPendingBattleStart({ encounters, playerHp });
       setBattleDeckPreviewId(activeDeckId);
@@ -2971,7 +2972,7 @@ export default function Home() {
   const useCurrentHealthShrine = () => {
     if (effectiveRoomType(mapPosition) !== "healthShrine") return;
     const roomKey = mapRoomKey(mapPosition);
-    const healAmount = blessings.includes("forbiddenKnowledge") ? 0 : Math.floor(maxPlayerHp * 0.2);
+    const healAmount = blessings.includes("forbiddenKnowledge") ? 0 : Math.floor(maxPlayerHp * 0.3);
     const previousHp = runPlayerHpRef.current;
     const nextHp = Math.min(maxPlayerHp, previousHp + healAmount);
     runPlayerHpRef.current = nextHp;
@@ -7549,7 +7550,7 @@ export default function Home() {
                 onClick={useCurrentHealthShrine}
               >
                 <strong>회복의 성소 이용하기</strong>
-                <small>최대 체력의 20% 회복(버림) · 사용 후 붕괴</small>
+                <small>최대 체력의 30% 회복(버림) · 사용 후 붕괴</small>
               </button>
             )}
             {currentRoomType === "blessing" && (

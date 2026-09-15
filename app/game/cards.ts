@@ -17,6 +17,7 @@ export type CardEffect =
   | "focus"
   | "adrenaline"
   | "rulerCompass"
+  | "quickStep"
   | "suppression"
   | "starArk"
   | "massDeal"
@@ -172,6 +173,7 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "weaponSharpen", rarity: "special", name: "무기 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "armorSharpen", rarity: "special", name: "방어구 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "dash", rarity: "special", name: "질주", cost: 1, value: 0, draw: 0, damageType: "physical", forgeCost: 3 },
+  { kind: "skill", effect: "quickStep", rarity: "special", name: "퀵스텝", cost: 1, value: 0, draw: 2, damageType: "physical" },
   { kind: "strike", effect: "suppression", rarity: "special", name: "진압", cost: 3, value: 15, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "starArk", rarity: "special", name: "별의 방주", cost: 3, value: 10, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "counter", rarity: "special", name: "응수", cost: 0, value: 0, draw: 0, damageType: "physical" },
@@ -238,7 +240,7 @@ export const DEBUG_CARD_RARITIES: Array<{ rarity: CardRarity; label: string }> =
 ];
 
 export const CARD_POOL_DRAW_EFFECTS = new Set<CardEffect>([
-  "pommel", "deflect", "prepare", "drawEachPile", "dash", "battlePlan", "fileDraw", "flood", "adrenaline", "astronomyResearch", "necromancyResearch",
+  "pommel", "deflect", "prepare", "drawEachPile", "dash", "quickStep", "battlePlan", "fileDraw", "flood", "adrenaline", "astronomyResearch", "necromancyResearch",
 ]);
 export const CARD_POOL_ENERGY_EFFECTS = new Set<CardEffect>([
   "focus", "adrenaline", "berserk", "ventilate", "plateArmor", "charge", "flood", "endStart", "supernova", "aries", "economicsResearch",
