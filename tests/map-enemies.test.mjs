@@ -271,7 +271,7 @@ test("awake enemies block alerted distance-field planning even if they later mov
   assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 0, y: 0 }, { x: 2, y: 0 }]);
 });
 
-test("a planned player collision cancels every other enemy movement", () => {
+test("a planned player collision does not cancel other enemy movement", () => {
   const enemies = [
     { id: "collider", position: { x: 1, y: 0 }, encounterIndex: 0, awareness: "alerted" },
     { id: "other", position: { x: 1, y: 2 }, encounterIndex: 1, awareness: "alerted" },
@@ -284,7 +284,7 @@ test("a planned player collision cancels every other enemy movement", () => {
     randomValues(0.9, 0, 0.9, 0),
   );
   assert.deepEqual(result.collisionEnemyIds, ["collider"]);
-  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 2, y: 0 }, { x: 1, y: 2 }]);
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 2, y: 0 }, { x: 2, y: 1 }]);
 });
 
 test("an alerted enemy has a 95 percent chance to move closer", () => {
@@ -366,7 +366,7 @@ test("an enemy already collided with by the player stays in place for this enemy
   assert.deepEqual(result.collisionEnemyIds, ["occupied-room"]);
 });
 
-test("enemies cannot overlap when moving onto the player in the same turn", () => {
+test("enemies can overlap on the player cell in the same turn", () => {
   const enemies = [
     { id: "first", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "alerted" },
     { id: "second", position: { x: 0, y: 2 }, encounterIndex: 1, awareness: "alerted" },
@@ -378,8 +378,8 @@ test("enemies cannot overlap when moving onto the player in the same turn", () =
     alwaysWalkable,
     randomValues(0.9, 0, 0, 0.9, 0, 0),
   );
-  assert.deepEqual(result.collisionEnemyIds, ["first"]);
-  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 1, y: 1 }, { x: 0, y: 2 }]);
+  assert.deepEqual(result.collisionEnemyIds, ["first", "second"]);
+  assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 1, y: 1 }, { x: 1, y: 1 }]);
 });
 
 test("portal landing clears the player's five by five area", () => {

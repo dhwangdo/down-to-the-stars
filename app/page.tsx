@@ -334,6 +334,10 @@ type PendingBattleStart = {
   playerHp: number;
 };
 
+type MapBattleEnemy = BattleEncounter & {
+  id: string;
+};
+
 function animateEnemyCardDelivery(target: HTMLElement, source: DOMRect, delay = 0) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
   const targetRect = target.getBoundingClientRect();
@@ -1708,6 +1712,7 @@ export default function Home() {
   const [rockBombHits, setRockBombHits] = useState<Record<string, number>>({});
   const [activeMapEnemyIds, setActiveMapEnemyIds] = useState<string[]>([]);
   const [activeBattleRoom, setActiveBattleRoom] = useState<string | null>(null);
+  const mapBattleQueueRef = useRef<MapBattleEnemy[]>([]);
   const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const [mapZoom, setMapZoom] = useState(MAP_DEFAULT_ZOOM);
   const [mapViewportSize, setMapViewportSize] = useState({ width: 0, height: 0 });
@@ -3121,24 +3126,13 @@ export default function Home() {
     world: MapEnemyWorld,
   ) => {
     const roomKey = mapRoomKey(nextPosition);
-    // 직접 적을 만난 순간 전투로 전환한다. 그 턴에는 다른 적을 움직이지 않는다.
-    const playerCollisionIds = new Set(world.enemies
-      .filter((enemy) => mapRoomKey(enemy.position) === roomKey)
-      .map((enemy) => enemy.id));
-    if (playerCollisionIds.size > 0) {
-      return {
-        world,
-        collisionEnemies: world.enemies.filter((enemy) => playerCollisionIds.has(enemy.id)),
-      };
-    }
-
     const enemyTurn = advanceMapEnemies(
       world.enemies,
       currentPosition,
       nextPosition,
       (position) => isWalkableRoom(effectiveRoomType(position)) && !isSafeAreaPosition(position, mapSeed),
       Math.random,
-      playerCollisionIds,
+      new Set(),
       (blessings.includes("lightStep") ? 0.5 : 1) * (blessings.includes("bioluminescence") ? 1.5 : 1),
       {
         minX: Math.max(DUNGEON_MIN_X, nextPosition.x - MAP_ENEMY_DISTANCE_FIELD_RADIUS),
@@ -3151,22 +3145,20 @@ export default function Home() {
       ...world,
       enemies: enemyTurn.enemies,
     };
-    const collisionEnemyIds = new Set([
-      ...playerCollisionIds,
-      ...enemyTurn.collisionEnemyIds,
-    ]);
-    const collisionEnemies = enemyTurn.enemies.filter((enemy) =>
-      collisionEnemyIds.has(enemy.id));
+    const collisionEnemies = enemyTurn.enemies.filter((enemy) => mapRoomKey(enemy.position) === roomKey);
     return { world: nextWorld, collisionEnemies };
   };
 
   const beginMapEnemyBattle = (
-    enemies: { id: string; encounterIndex: number; damageTaken?: number; awareness?: "sleeping" | "awake" | "alerted"; isBoss?: boolean }[],
+    enemies: MapBattleEnemy[],
     roomKey: string,
   ) => {
+    const [firstEnemy, ...remainingEnemies] = enemies;
+    if (!firstEnemy) return;
+    mapBattleQueueRef.current = remainingEnemies;
     setActiveMapEnemyIds(enemies.map((enemy) => enemy.id));
     setActiveBattleRoom(roomKey);
-    startBattle(enemies, runPlayerHpRef.current);
+    startBattle([firstEnemy], runPlayerHpRef.current);
   };
 
   const useCurrentHeal = () => {
@@ -3553,7 +3545,36 @@ export default function Home() {
         [battleRoom]: landingDrops,
       }));
       setGold((current) => current + battleRewardGold);
+      if (battleRewardDecks.length > 0) setRoomDeckDrops((current) => ({
+        ...current,
+        [battleRoom]: [...(current[battleRoom] ?? []), ...battleRewardDecks],
+      }));
+      if (battleRewardConsumables.length > 0) setRoomConsumableDrops((current) => ({
+        ...current,
+        [battleRoom]: [...(current[battleRoom] ?? []), ...battleRewardConsumables],
+      }));
     }
+
+    const nextEnemy = mapBattleQueueRef.current.shift();
+    if (nextEnemy && battleRoom) {
+      const nextPlayerHp = game.playerHp;
+      runPlayerHpRef.current = nextPlayerHp;
+      setRunPlayerHp(nextPlayerHp);
+      setBattleRewards([]);
+      setBattleRewardDecks([]);
+      setBattleRewardConsumables([]);
+      setBattleRewardGold(0);
+      battleRewardIsBossRef.current = nextEnemy.isBoss === true;
+      battleRewardIsOutOfDepthRef.current = nextEnemy.isBoss !== true
+        && isHigherRegionMapEnemy(nextEnemy.encounterIndex, mapPosition, mapSeed);
+      startBattleNow(
+        [nextEnemy],
+        nextPlayerHp,
+        previousBattleDeckIdRef.current ?? activeDeckId,
+      );
+      return;
+    }
+
     if (activeMapEnemyIds.length > 0 && battleRoom) {
       const defeatedBossRegionIndices = mapEnemyWorld.enemies
         .filter((enemy) => activeMapEnemyIds.includes(enemy.id) && enemy.isBoss)
@@ -3564,14 +3585,6 @@ export default function Home() {
       const remainingEnemies = mapEnemyWorld.enemies.filter((enemy) => !activeMapEnemyIds.includes(enemy.id));
       setMapEnemyWorld({ ...mapEnemyWorld, enemies: remainingEnemies });
       rememberPlayerVision(mapPosition, mapSeed, remainingEnemies);
-      if (battleRewardDecks.length > 0) setRoomDeckDrops((current) => ({
-        ...current,
-        [battleRoom]: [...(current[battleRoom] ?? []), ...battleRewardDecks],
-      }));
-      if (battleRewardConsumables.length > 0) setRoomConsumableDrops((current) => ({
-        ...current,
-        [battleRoom]: [...(current[battleRoom] ?? []), ...battleRewardConsumables],
-      }));
     }
     runPlayerHpRef.current = game.playerHp;
     setRunPlayerHp(game.playerHp);
@@ -3581,6 +3594,7 @@ export default function Home() {
     setBattleRewardGold(0);
     setActiveMapEnemyIds([]);
     setActiveBattleRoom(null);
+    mapBattleQueueRef.current = [];
     setScreen("map");
     queueRunSave(500);
   };
@@ -3588,6 +3602,7 @@ export default function Home() {
   const startNewRun = () => {
     clearBattleTimers();
     clearMapTravel();
+    mapBattleQueueRef.current = [];
     setDebugMode(false);
     const nextSeed = createRandomMapSeed();
     const starterDeck = createStarterDeck();
@@ -3635,6 +3650,7 @@ export default function Home() {
     setRockBombHits({});
     setActiveMapEnemyIds([]);
     setActiveBattleRoom(null);
+    mapBattleQueueRef.current = [];
     previousBattleDeckIdRef.current = null;
     battleRewardIsBossRef.current = false;
     battleRewardIsOutOfDepthRef.current = false;

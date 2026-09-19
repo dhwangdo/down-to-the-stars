@@ -173,8 +173,15 @@ type FlowEdge = {
   option?: MovementOption;
 };
 
-function addFlowEdge(graph: FlowEdge[][], from: number, to: number, cost: number, option?: MovementOption) {
-  const forward: FlowEdge = { to, reverseIndex: graph[to].length, capacity: 1, cost, option };
+function addFlowEdge(
+  graph: FlowEdge[][],
+  from: number,
+  to: number,
+  cost: number,
+  option?: MovementOption,
+  capacity = 1,
+) {
+  const forward: FlowEdge = { to, reverseIndex: graph[to].length, capacity, cost, option };
   const reverse: FlowEdge = { to: from, reverseIndex: graph[from].length, capacity: 0, cost: -cost };
   graph[from].push(forward);
   graph[to].push(reverse);
@@ -183,6 +190,7 @@ function addFlowEdge(graph: FlowEdge[][], from: number, to: number, cost: number
 function assignAlertedDestinations(
   enemies: MapEnemy[],
   optionsByEnemyId: ReadonlyMap<string, MovementOption[]>,
+  shareableDestinationKeys: ReadonlySet<string> = new Set(),
 ) {
   if (enemies.length === 0) return new Map<string, GridPosition>();
   const destinationKeys = Array.from(new Set(enemies.flatMap((enemy) =>
@@ -215,7 +223,14 @@ function assignAlertedDestinations(
       addFlowEdge(graph, enemyNode, destinationNode, -score, option);
     }
   });
-  destinationKeys.forEach((_, index) => addFlowEdge(graph, destinationOffset + index, sink, 0));
+  destinationKeys.forEach((destinationKey, index) => addFlowEdge(
+    graph,
+    destinationOffset + index,
+    sink,
+    0,
+    undefined,
+    shareableDestinationKeys.has(destinationKey) ? enemies.length : 1,
+  ));
 
   for (let flow = 0; flow < enemies.length; flow += 1) {
     const distance = Array(graph.length).fill(Number.POSITIVE_INFINITY);
@@ -314,10 +329,6 @@ export function advanceMapEnemies(
     position: { ...enemy.position },
   }));
   const playerKey = positionKey(playerPosition);
-  const existingColliders = nextEnemies.filter((enemy) => positionKey(enemy.position) === playerKey);
-  if (existingColliders.length > 0) {
-    return { enemies: nextEnemies, collisionEnemyIds: existingColliders.map((enemy) => enemy.id) };
-  }
 
   const awarenessDistanceField = createEightDirectionDistanceField(
     playerPosition,
@@ -401,18 +412,17 @@ export function advanceMapEnemies(
     alertedOptions.set(enemy.id, options);
   }
 
-  const alertedAssignments = assignAlertedDestinations(alertedMovers, alertedOptions);
-  const alertedCollider = alertedMovers.find((enemy) =>
-    positionKey(alertedAssignments.get(enemy.id) ?? enemy.position) === playerKey);
-  if (alertedCollider) {
-    alertedCollider.position = { ...playerPosition };
-    return { enemies: nextEnemies, collisionEnemyIds: [alertedCollider.id] };
-  }
+  const alertedAssignments = assignAlertedDestinations(
+    alertedMovers,
+    alertedOptions,
+    new Set([playerKey]),
+  );
 
   const plannedPositions = new Map(nextEnemies.map((enemy) => [enemy.id, { ...enemy.position }]));
   alertedAssignments.forEach((position, enemyId) => plannedPositions.set(enemyId, { ...position }));
   const occupiedCellKeys = new Set(nextEnemies.map((enemy) =>
     positionKey(plannedPositions.get(enemy.id) ?? enemy.position)));
+  occupiedCellKeys.delete(playerKey);
 
   for (const enemy of awakeMovers) {
     const origin = plannedPositions.get(enemy.id) ?? enemy.position;
@@ -423,18 +433,19 @@ export function advanceMapEnemies(
     const destination = candidates.length > 0
       ? candidates[randomIndex(candidates.length, random)]
       : origin;
-    if (positionKey(destination) === playerKey) {
-      enemy.position = { ...playerPosition };
-      return { enemies: nextEnemies, collisionEnemyIds: [enemy.id] };
-    }
     plannedPositions.set(enemy.id, { ...destination });
-    occupiedCellKeys.add(positionKey(destination));
+    if (positionKey(destination) !== playerKey) occupiedCellKeys.add(positionKey(destination));
   }
 
   for (const enemy of nextEnemies) {
     enemy.position = plannedPositions.get(enemy.id) ?? enemy.position;
   }
-  return { enemies: nextEnemies, collisionEnemyIds: [] };
+  return {
+    enemies: nextEnemies,
+    collisionEnemyIds: nextEnemies
+      .filter((enemy) => positionKey(enemy.position) === playerKey)
+      .map((enemy) => enemy.id),
+  };
 }
 
 export function awarenessSymbol(awareness: MapEnemyAwareness) {
