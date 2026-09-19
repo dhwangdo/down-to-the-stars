@@ -151,8 +151,6 @@ export const BASIC_CARD_POOL: CardBlueprint[] = [
   { kind: "strike", effect: "rulerCompass", rarity: "basic", name: "자와 컴퍼스", cost: 1, value: 9, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "strike", rarity: "basic", name: "기회 포착", cost: 1, value: 6, draw: 1, damageType: "physical" },
   { kind: "skill", effect: "deflect", rarity: "basic", name: "기회 창출", cost: 1, value: 5, draw: 1, damageType: "physical" },
-  { kind: "skill", effect: "sweep", rarity: "basic", name: "휩쓸기", cost: 1, value: 9, draw: 0, damageType: "physical" },
-  { kind: "strike", effect: "boomerang", rarity: "basic", name: "정리 타격", cost: 1, value: 9, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "waterWave", rarity: "basic", name: "물의 파동", cost: 1, value: 5, draw: 1, damageType: "magic" },
   { kind: "skill", effect: "starGuard", rarity: "basic", name: "별의 장막", cost: 2, value: 12, draw: 0, damageType: "physical" },
 ];
@@ -169,6 +167,8 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "lightCluster", rarity: "special", name: "빛무리", cost: 0, value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "largePrism", rarity: "special", name: "대형 프리즘", cost: 3, value: 3, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "nebula", rarity: "special", name: "성운", cost: 1, value: 2, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "sweep", rarity: "special", name: "휩쓸기", cost: 1, value: 9, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "boomerang", rarity: "special", name: "정리 타격", cost: 1, value: 9, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "warmUp", rarity: "special", name: "준비 운동", cost: 0, value: 4, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "starlight", rarity: "special", name: "별빛", cost: 0, value: 2, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "iceShield", rarity: "special", name: "얼음 방패", cost: 1, value: 11, draw: 0, damageType: "magic" },

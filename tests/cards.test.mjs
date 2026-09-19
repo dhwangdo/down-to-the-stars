@@ -13,8 +13,8 @@ import {
 
 test("card pools preserve the current content counts", () => {
   assert.equal(STARTER_CARD_POOL.length, 3);
-  assert.equal(BASIC_CARD_POOL.length, 8);
-  assert.equal(SPECIAL_CARD_POOL.length, 28);
+  assert.equal(BASIC_CARD_POOL.length, 6);
+  assert.equal(SPECIAL_CARD_POOL.length, 30);
   assert.equal(RARE_CARD_POOL.length, 16);
   assert.equal(LEGENDARY_CARD_POOL.length, 6);
   assert.equal(ALL_CARD_BLUEPRINTS.length, 62);

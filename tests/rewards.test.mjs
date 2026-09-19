@@ -30,6 +30,8 @@ test("out-of-depth battle rewards always include a deck", () => {
   const reward = createBattleReward(2, 0, 0, 0, 0, true);
   assert.equal(reward.decks.length, 1);
   assert.equal(reward.cards.length, 0);
+  assert.equal(reward.consumableType, null);
+  assert.deepEqual(reward.consumableTypes, []);
 });
 
 test("ticket tiers and base prices match the shop rules", () => {
@@ -37,13 +39,14 @@ test("ticket tiers and base prices match the shop rules", () => {
     paintTicket: 1,
     bombTicket: 1,
     extractTicket: 1,
-    mapTicket: 1,
+    mapTicket: 2,
     mindEyeTicket: 1,
+    darkTicket: 1,
     transformTicket: 2,
     cloneTicket: 3,
   });
   for (const type of TICKET_TYPES) {
-    assert.equal(ticketBasePrice(type), TICKET_TIERS[type] * 30);
+    assert.equal(ticketBasePrice(type), 30 + (TICKET_TIERS[type] - 1) * 50);
   }
 });
 

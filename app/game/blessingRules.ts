@@ -5,7 +5,9 @@ export type BlessingId =
   | "swordShield" | "binaryStars" | "healingMileage" | "forbiddenKnowledge" | "gambling"
   | "oneMore" | "bombardier" | "transformer" | "mirror" | "goldRush" | "lightTicket"
   | "archaeologist" | "highlander" | "clairvoyance" | "blacksmith" | "packInsurance"
-  | "bioluminescence" | "oneUp" | "vulnerabilityInsurance" | "thornCoat" | "glassCannon";
+  | "bioluminescence" | "oneUp" | "vulnerabilityInsurance" | "thornCoat" | "glassCannon"
+  | "oparts" | "backToBasics" | "absorption" | "bloodConversion" | "starlessAge"
+  | "cartographer" | "bossSlayer" | "lightLightLight" | "shrinePilgrim";
 
 export type BlessingOfferId = BlessingId | "empty";
 
@@ -38,6 +40,15 @@ export const BLESSING_INFO: Record<BlessingOfferId, { name: string; description:
   vulnerabilityInsurance: { name: "취약 보험", description: "취약 피해가 200% 대신 150%가 됩니다." },
   thornCoat: { name: "가시 코트", description: "전투 시작 시 가시 5 획득" },
   glassCannon: { name: "유리 대포", description: "최대 에너지 +1. 물리·마법 저항을 얻을 수 없습니다." },
+  oparts: { name: "오파츠", description: "미래에서 온 덱을 받습니다." },
+  backToBasics: { name: "기본으로 돌아가기", description: "시작 카드와 일반 카드를 사용할 때 힘 +4, 강인함 +4가 적용됩니다." },
+  absorption: { name: "흡수", description: "전투 시작 시 모든 적의 힘 1을 빼앗습니다. 적마다 힘 -1, 내 힘 +1." },
+  bloodConversion: { name: "혈기 전환", description: "내 턴 시작 시 체력 1을 에너지 1로 전환합니다. 체력이 1이면 전환하지 않습니다." },
+  starlessAge: { name: "별이 없는 시대", description: "솔리테어 행동을 할 수 없습니다. 매 턴 시작 시 에너지 1과 무작위 파일 카드 1장을 얻습니다." },
+  cartographer: { name: "지도 제작자", description: "지도 티켓 2개를 얻습니다. 지도 티켓이 특수 지형 4곳을 밝힙니다." },
+  bossSlayer: { name: "보스 학살자", description: "보스에게 2배의 피해를 줍니다. 보스 처치 시 다음 지역 덱을 추가로 얻습니다." },
+  lightLightLight: { name: "빛 빛 빛", description: "내 3번째 턴 시작 시 광채 2장을 얻습니다." },
+  shrinePilgrim: { name: "성소 순례자", description: "성소를 사용할 때마다 최대 체력과 현재 체력이 2 증가합니다." },
   empty: { name: "빈 축복", description: "아무 효과도 없습니다." },
 };
 
@@ -52,9 +63,22 @@ function shuffled<T>(items: readonly T[], random = Math.random) {
   return result;
 }
 
-export function rollBlessingOffers(owned: readonly BlessingId[], count = 3, random = Math.random): BlessingOfferId[] {
-  const available = BLESSING_IDS.filter((id) => !owned.includes(id));
-  return [...shuffled(available, random).slice(0, count), ...Array(Math.max(0, count - available.length)).fill("empty")];
+export function rollBlessingOffers(
+  owned: readonly BlessingId[],
+  count = 3,
+  random = Math.random,
+  excluded: readonly BlessingId[] = [],
+): BlessingOfferId[] {
+  const available = BLESSING_IDS.filter((id) => !owned.includes(id) && !excluded.includes(id));
+  const allAvailable = BLESSING_IDS.filter((id) => !owned.includes(id));
+  const offers = shuffled(available, random).slice(0, count);
+  if (offers.length < count && allAvailable.length > 0) {
+    const fallback = shuffled(allAvailable, random);
+    for (let index = offers.length; index < count; index += 1) {
+      offers.push(fallback[(index - offers.length) % fallback.length]);
+    }
+  }
+  return [...offers, ...Array(Math.max(0, count - offers.length)).fill("empty")];
 }
 
 export function rollGamblingBlessings(owned: readonly BlessingId[], random = Math.random): BlessingOfferId[] {

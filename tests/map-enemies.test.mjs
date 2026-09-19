@@ -134,6 +134,35 @@ test("awareness uses one-step diagonal distance from the distance field", () => 
   assert.equal(result.enemies[0].awareness, "awake");
 });
 
+test("dark ticket limits recognition to distance one", () => {
+  const enemy = {
+    id: "dark-ticket-test",
+    position: { x: 2, y: 0 },
+    encounterIndex: 0,
+    awareness: "sleeping",
+  };
+  const normal = advanceMapEnemies(
+    [enemy],
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    alwaysWalkable,
+    () => 0,
+  );
+  const darkened = advanceMapEnemies(
+    [enemy],
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    alwaysWalkable,
+    () => 0,
+    new Set(),
+    1,
+    undefined,
+    1,
+  );
+  assert.equal(normal.enemies[0].awareness, "awake");
+  assert.equal(darkened.enemies[0].awareness, "sleeping");
+});
+
 test("an unseen awake enemy has a 3 percent chance to fall asleep", () => {
   const result = advanceMapEnemies(
     [{ id: "unseen-wanderer", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "awake" }],

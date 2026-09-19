@@ -1,5 +1,5 @@
 const TELEMETRY_STORAGE_KEY = "down-to-the-stars.telemetry.v2";
-const TELEMETRY_SCHEMA_VERSION = 3;
+const TELEMETRY_SCHEMA_VERSION = 4;
 
 export type TelemetryCardSnapshot = {
   id: number;
@@ -29,8 +29,33 @@ export type TelemetryEnemySnapshot = {
 
 export type TelemetryCardAcquisition = {
   at: string;
-  source: "battle-reward" | "shop" | "card-pack" | "floor";
+  source: "battle-reward" | "shop" | "card-pack" | "floor" | "treasure-chest";
   card: TelemetryCardSnapshot;
+};
+
+export type TelemetryAcquisitionSource =
+  | "battle-reward"
+  | "shop"
+  | "card-pack"
+  | "floor"
+  | "treasure-chest"
+  | "blessing"
+  | "shrine"
+  | "other";
+
+export type TelemetryConsumableSnapshot = {
+  id: string;
+  type: string;
+  name: string;
+};
+
+export type TelemetryAcquisition = {
+  at: string;
+  source: TelemetryAcquisitionSource;
+  kind: "gold" | "consumable" | "deck";
+  amount?: number;
+  consumable?: TelemetryConsumableSnapshot;
+  deck?: TelemetryDeckSnapshot;
 };
 
 export type TelemetryTurn = {
@@ -67,6 +92,7 @@ export type TelemetryRun = {
   startingDecks: TelemetryDeckSnapshot[];
   activeDeckId: string;
   acquiredCards: TelemetryCardAcquisition[];
+  acquisitions: TelemetryAcquisition[];
   battles: TelemetryBattle[];
   result?: "won" | "lost" | "abandoned";
 };
@@ -117,6 +143,7 @@ function loadStore(): TelemetryStore {
     const runs = parsed.runs.map((run) => ({
       ...run,
       acquiredCards: Array.isArray(run.acquiredCards) ? run.acquiredCards : [],
+      acquisitions: Array.isArray(run.acquisitions) ? run.acquisitions : [],
       battles: Array.isArray(run.battles)
         ? run.battles.map((battle) => ({
           ...battle,
@@ -146,26 +173,7 @@ function loadStore(): TelemetryStore {
 function persist(recorder: TelemetryRecorder) {
   if (typeof window === "undefined") return;
   try {
-    // 저장소에도 적별 피해 외의 카드·덱·턴 로그를 남기지 않는다.
-    const compactStore: TelemetryStore = {
-      schemaVersion: TELEMETRY_SCHEMA_VERSION,
-      game: "Down to the Stars",
-      runs: recorder.store.runs.map((run) => ({
-        id: run.id,
-        startedAt: run.startedAt,
-        endedAt: run.endedAt,
-        result: run.result,
-        battles: run.battles.map((battle) => ({
-          id: battle.id,
-          startedAt: battle.startedAt,
-          endedAt: battle.endedAt,
-          enemies: battle.enemies,
-          damageByEnemy: battle.damageByEnemy ?? {},
-          result: battle.result,
-        })),
-      })),
-    } as TelemetryStore;
-    window.localStorage.setItem(TELEMETRY_STORAGE_KEY, JSON.stringify(compactStore));
+    window.localStorage.setItem(TELEMETRY_STORAGE_KEY, JSON.stringify(recorder.store));
   } catch {
     // 로그 저장 실패가 게임 플레이를 막지는 않게 한다.
   }
@@ -202,11 +210,7 @@ export function hasActiveTelemetryRun(recorder: TelemetryRecorder) {
 }
 
 export function beginTelemetryRun(recorder: TelemetryRecorder, input: RunStart) {
-  const previous = activeRun(recorder);
-  if (previous && !previous.endedAt) {
-    previous.endedAt = new Date().toISOString();
-    previous.result = "abandoned";
-  }
+  recorder.store = emptyStore();
   const run: TelemetryRun = {
     id: makeId("run"),
     startedAt: new Date().toISOString(),
@@ -215,13 +219,12 @@ export function beginTelemetryRun(recorder: TelemetryRecorder, input: RunStart) 
     startingDecks: input.startingDecks,
     activeDeckId: input.activeDeckId,
     acquiredCards: [],
+    acquisitions: [],
     battles: [],
   };
   recorder.store.runs.push(run);
   recorder.activeRunId = run.id;
   recorder.activeBattleId = null;
-  // 장기 플레이에서도 브라우저 저장소가 무한히 커지지 않게 한다.
-  if (recorder.store.runs.length > 200) recorder.store.runs.splice(0, recorder.store.runs.length - 200);
   persist(recorder);
 }
 
@@ -292,6 +295,40 @@ export function recordTelemetryCardAcquired(
   persist(recorder);
 }
 
+export function recordTelemetryGoldAcquired(
+  recorder: TelemetryRecorder,
+  amount: number,
+  source: TelemetryAcquisitionSource,
+) {
+  const run = activeRun(recorder);
+  const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+  if (!run || safeAmount <= 0) return;
+  run.acquisitions.push({ at: new Date().toISOString(), source, kind: "gold", amount: safeAmount });
+  persist(recorder);
+}
+
+export function recordTelemetryConsumableAcquired(
+  recorder: TelemetryRecorder,
+  consumable: TelemetryConsumableSnapshot,
+  source: TelemetryAcquisitionSource,
+) {
+  const run = activeRun(recorder);
+  if (!run || run.acquisitions.some((item) => item.kind === "consumable" && item.consumable?.id === consumable.id)) return;
+  run.acquisitions.push({ at: new Date().toISOString(), source, kind: "consumable", consumable });
+  persist(recorder);
+}
+
+export function recordTelemetryDeckAcquired(
+  recorder: TelemetryRecorder,
+  deck: TelemetryDeckSnapshot,
+  source: TelemetryAcquisitionSource,
+) {
+  const run = activeRun(recorder);
+  if (!run || run.acquisitions.some((item) => item.kind === "deck" && item.deck?.id === deck.id)) return;
+  run.acquisitions.push({ at: new Date().toISOString(), source, kind: "deck", deck });
+  persist(recorder);
+}
+
 export function finishTelemetryBattle(
   recorder: TelemetryRecorder,
   result: "won" | "lost",
@@ -316,6 +353,26 @@ export function finishTelemetryRun(recorder: TelemetryRecorder, result: "won" | 
   run.result = result;
   recorder.activeBattleId = null;
   persist(recorder);
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(TELEMETRY_STORAGE_KEY);
+    } catch {
+      // 로그 초기화 실패가 게임 플레이를 막지는 않게 한다.
+    }
+  }
+}
+
+export function resetTelemetryRecorder(recorder: TelemetryRecorder) {
+  recorder.store = emptyStore();
+  recorder.activeRunId = null;
+  recorder.activeBattleId = null;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(TELEMETRY_STORAGE_KEY);
+    } catch {
+      // 로그 초기화 실패가 게임 플레이를 막지는 않게 한다.
+    }
+  }
 }
 
 export function exportTelemetryJson(recorder: TelemetryRecorder) {
@@ -332,12 +389,20 @@ export function exportTelemetryText(recorder: TelemetryRecorder) {
   const lines = ["Down to the Stars 피해 기록", `저장 시각: ${new Date().toISOString()}`, ""];
   recorder.store.runs.forEach((run, runIndex) => {
     lines.push(`탐험 ${runIndex + 1}`);
+    run.acquisitions.forEach((acquisition) => {
+      if (acquisition.kind === "gold") lines.push(`골드 +${formatTelemetryAmount(acquisition.amount ?? 0)}`);
+      if (acquisition.kind === "consumable") lines.push(`소모품 획득: ${acquisition.consumable?.name ?? "이름 없음"}`);
+      if (acquisition.kind === "deck") lines.push(`덱 획득: '${acquisition.deck?.name ?? "이름 없음"}'`);
+    });
     run.battles.forEach((battle, battleIndex) => {
       lines.push(`전투 ${battleIndex + 1}`);
       const entries = battle.enemies
         .map((enemy) => ({ enemy, amount: battle.damageByEnemy?.[enemy.id] ?? 0 }))
         .filter(({ amount }) => amount > 0);
-      if (entries.length === 0) lines.push("받은 피해 없음");
+      if (entries.length === 0) {
+        const enemyNames = battle.enemies.map((enemy) => enemy.name).join(", ") || "적";
+        lines.push(`${enemyNames}랑 싸워서 0 피해`);
+      }
       else entries.forEach(({ enemy, amount }) => lines.push(`${enemy.name}에게 ${formatTelemetryAmount(amount)} 피해를 받았습니다.`));
     });
     if (run.battles.length === 0) lines.push("전투 기록 없음");

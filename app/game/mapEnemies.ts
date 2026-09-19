@@ -304,10 +304,15 @@ function awarenessAfterDetection(
   distance: number,
   random: () => number,
   detectionMultiplier: number,
+  detectionDistanceReduction: number,
 ) {
   if (awareness === "alerted" && distance >= 4) return "awake";
   if (awareness === "awake" && distance >= 3 && random() < 0.03) return "sleeping";
-  const detectionChance = distance === 1 ? 0.5 : distance === 2 ? 0.1 : 0;
+  const detectionChance = distance === 1
+    ? 0.5
+    : distance === 2 && detectionDistanceReduction < 1
+      ? 0.1
+      : 0;
   if (detectionChance === 0 || random() / detectionMultiplier >= detectionChance) return awareness;
   if (awareness === "sleeping") return "awake";
   if (awareness === "awake") return "alerted";
@@ -323,6 +328,7 @@ export function advanceMapEnemies(
   frozenEnemyIds: ReadonlySet<string> = new Set(),
   detectionMultiplier = 1,
   movementBounds: GridBounds = defaultMovementBounds(enemies, playerPosition),
+  detectionDistanceReduction = 0,
 ) {
   const nextEnemies = enemies.map((enemy) => ({
     ...enemy,
@@ -352,6 +358,7 @@ export function advanceMapEnemies(
         distanceAtStart,
         random,
         detectionMultiplier,
+        detectionDistanceReduction,
       );
     if (nextAwareness !== enemy.awareness) {
       enemy.awareness = nextAwareness;

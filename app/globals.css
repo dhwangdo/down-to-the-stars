@@ -2123,6 +2123,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .consumable-ticket.swiftTicket { --ticket-fill: #cfdfea; --ticket-border: #526f82; }
 .consumable-ticket.paintTicket { --ticket-fill: #f3b6ca; --ticket-border: #914b64; }
 .consumable-ticket.mindEyeTicket { --ticket-fill: #bcd9ee; --ticket-border: #436f8c; }
+.consumable-ticket.darkTicket { --ticket-fill: #a9a7c8; --ticket-border: #4b4770; }
 .consumable-ticket.bombTicket { --ticket-fill: #e8b09d; --ticket-border: #8b503d; }
 .consumable-ticket.cloneTicket { --ticket-fill: #bfe1d2; --ticket-border: #467561; }
 .consumable-ticket.extractTicket { --ticket-fill: #ead8aa; --ticket-border: #87703d; }
@@ -3243,6 +3244,11 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
     0 0 15px 5px rgba(239, 126, 31, .62),
     inset 0 0 12px rgba(255, 189, 96, .3);
 }
+.dragging-solitaire .stacked-card.is-hovered-solitaire-drop-target,
+.dragging-solitaire .empty-slot.is-hovered-solitaire-drop-target {
+  outline: 3px solid #fff06a;
+  outline-offset: 4px;
+}
 
 .stacked-card,
 .empty-slot {
@@ -3656,6 +3662,12 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .dragging-skill .center-drop-zone { background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 3px rgba(255,255,255,.58); }
 .dragging-skill .defend-prompt { display: block; }
 .dragging-skill .status-strip { display: none; }
+.has-keyboard-center-drop .center-drop-zone {
+  background: rgba(255,255,255,.1);
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,.58);
+}
+.has-keyboard-center-drop .defend-prompt { display: block; }
+.has-keyboard-center-drop .status-strip { display: none; }
 .is-center-drop-hover .center-drop-zone {
   background: rgba(255, 224, 125, .14);
   box-shadow: inset 0 0 0 3px rgba(255, 224, 125, .92), 0 0 16px rgba(255, 183, 42, .42);

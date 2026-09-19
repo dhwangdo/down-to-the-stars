@@ -50,7 +50,7 @@ export const BLESSING_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.01 / SPECIAL_NODE_WE
 export const PORTAL_NODE_CHANCE = 0.05;
 export const ROCK_CLUSTER_CHANCE = 0.03;
 export const ROCK_CLUSTER_EDGE_CHANCE = 0.05;
-export const FLOOR_CARD_DROP_CHANCE = 0.01;
+export const FLOOR_CARD_DROP_CHANCE = 0.005;
 export const FLOOR_CARD_ITEM_CHANCE = 0.8;
 export const FLOOR_CARD_RARITY_CHANCES = {
   rare: 0.05,
@@ -339,17 +339,29 @@ export function visibleMapRoomKeys(
 
   const visible = new Set<string>([centerKey]);
   const traversed = new Set<string>([centerKey]);
+  const distanceByKey = new Map<string, number>([[centerKey, 0]]);
+  const maximumDistance = Math.max(horizontalRadius, verticalRadius);
   const queue = [centerCell.position];
   for (let index = 0; index < queue.length; index += 1) {
     const current = queue[index];
+    const currentKey = mapRoomKey(current);
+    const currentDistance = distanceByKey.get(currentKey) ?? 0;
+    if (currentDistance >= maximumDistance) continue;
     for (const direction of EIGHT_DIRECTIONS) {
       const next = { x: current.x + direction.x, y: current.y + direction.y };
       const nextKey = mapRoomKey(next);
       const nextCell = candidates.get(nextKey);
       if (!nextCell) continue;
+      const nextDistance = currentDistance + 1;
+      if (
+        nextDistance > maximumDistance
+        || Math.abs(next.x - center.x) > horizontalRadius
+        || Math.abs(next.y - center.y) > verticalRadius
+      ) continue;
       visible.add(nextKey);
       if (!isWalkableRoom(nextCell.type) || traversed.has(nextKey)) continue;
       traversed.add(nextKey);
+      distanceByKey.set(nextKey, nextDistance);
       queue.push(nextCell.position);
     }
   }

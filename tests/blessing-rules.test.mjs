@@ -10,9 +10,16 @@ import {
   shouldPreserveTicket,
 } from "../app/game/blessingRules.ts";
 
-test("blessing offers are filled with repeatable empty blessings when the pool is short", () => {
+test("blessing offers repeat available blessings when the pool is short", () => {
   const owned = BLESSING_IDS.slice(0, -1);
-  assert.deepEqual(rollBlessingOffers(owned, 3, () => 0), [BLESSING_IDS.at(-1), "empty", "empty"]);
+  assert.deepEqual(rollBlessingOffers(owned, 3, () => 0), [BLESSING_IDS.at(-1), BLESSING_IDS.at(-1), BLESSING_IDS.at(-1)]);
+});
+
+test("blessing rerolls can exclude blessings already shown", () => {
+  const firstOffers = rollBlessingOffers([], 3, () => 0);
+  const shown = firstOffers.filter((id) => id !== "empty");
+  const rerolledOffers = rollBlessingOffers([], 3, () => 0, shown);
+  assert.ok(rerolledOffers.every((id) => id === "empty" || !shown.includes(id)));
 });
 
 test("gambling excludes itself and already owned blessings", () => {

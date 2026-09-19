@@ -14,7 +14,7 @@ import {
   type CardBlueprint,
 } from "./cards.ts";
 import { createDeckName } from "./randomNames.ts";
-import { TICKET_TYPES } from "./shopRules.ts";
+import { TICKET_TIERS, TICKET_TYPES, type TicketType } from "./shopRules.ts";
 
 export type DeckEdition =
   | "clever"
@@ -55,6 +55,7 @@ export type DeckCase = {
 export type ConsumableType =
   | "paintTicket"
   | "mindEyeTicket"
+  | "darkTicket"
   | "bombTicket"
   | "cloneTicket"
   | "extractTicket"
@@ -82,12 +83,12 @@ export const STARTING_DECK_SIZE = 16;
 export const STARTER_DECK_CAPACITY = 20;
 export const DEBUG_ALL_CARDS_DECK_ID = "debug-all-cards";
 
-export const CONSUMABLE_TYPES: ConsumableType[] = [...TICKET_TYPES];
+export const CONSUMABLE_TYPES: TicketType[] = [...TICKET_TYPES];
 
 export function consumableTypeFromRoll(roll: number) {
   const weightedTypes = CONSUMABLE_TYPES.map((type) => ({
     type,
-    weight: type === "cloneTicket" ? .25 : 1,
+    weight: 0.5 ** (TICKET_TIERS[type] - 1),
   }));
   const totalWeight = weightedTypes.reduce((sum, item) => sum + item.weight, 0);
   let cursor = Math.max(0, Math.min(.999999999, roll)) * totalWeight;
@@ -549,6 +550,9 @@ export function createConsumable(type: ConsumableType, id: string): Consumable {
   if (type === "mindEyeTicket") {
     return { id, type, name: "심안 티켓", description: "20번 이동하는 동안 9×9 시야를 얻습니다." };
   }
+  if (type === "darkTicket") {
+    return { id, type, name: "어둠 티켓", description: "20턴 동안 적의 인식 거리가 1 감소합니다." };
+  }
   if (type === "bombTicket") {
     return { id, type, name: "폭탄 티켓", description: "점화한 뒤 바닥에 내려놓으면 3번 이동 후 폭발합니다." };
   }
@@ -583,11 +587,14 @@ export function createBattleReward(
   rareCardChance = 0.05,
   forceDeck = false,
 ) {
-  const gold = 15 + Math.floor(Math.random() * 16);
+  const regionMultiplier = 1.3 ** Math.max(0, regionNumber - 1);
+  const minimumGold = Math.floor(10 * regionMultiplier);
+  const maximumGold = Math.floor(15 * regionMultiplier);
+  const gold = minimumGold + Math.floor(Math.random() * (maximumGold - minimumGold + 1));
   const decks = forceDeck || Math.random() < deckDropChance
     ? [createRegionDeck(regionNumber, nextCardId, capacityBonus)]
     : [];
-  const consumableType = Math.random() < 0.5
+  const consumableType = decks.length === 0 && Math.random() < 0.5
     ? consumableTypeFromRoll(Math.random())
     : null;
   return {
@@ -599,11 +606,18 @@ export function createBattleReward(
   };
 }
 
-export function createBossBattleReward(nextCardId: number) {
+export function createBossBattleReward(
+  nextCardId: number,
+  bonusDeckRegion?: number,
+  capacityBonus = 0,
+) {
+  const decks = bonusDeckRegion === undefined
+    ? []
+    : [createRegionDeck(bonusDeckRegion, nextCardId + 1, capacityBonus)];
   return {
     gold: 80 + Math.floor(Math.random() * 21),
     cards: [createBattleRewardCard(nextCardId, 1)],
-    decks: [] as DeckCase[],
+    decks,
     consumableType: null,
     consumableTypes: Array.from({ length: 2 }, () => consumableTypeFromRoll(Math.random())),
   };
