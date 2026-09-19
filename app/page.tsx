@@ -2063,9 +2063,6 @@ export default function Home() {
     !blessings.includes("lightTicket") || item.type === "cardPack").length;
   const pendingInventoryCardCount = pendingRemovedCards.filter((card) => pendingRemovedCardAreas[card.id] === "inventory").length;
   const deckEditorInventoryItemCount = inventoryItemCount + pendingInventoryCardCount;
-  const deckEditorErrorMessage = /불가능|가득|더 이상|반드시|이하로 줄여야/.test(deckEditorMessage)
-    ? deckEditorMessage
-    : null;
 
   const nextConsumable = (type: ConsumableType) => {
     const id = `consumable-${nextConsumableIdRef.current}`;
@@ -8694,7 +8691,7 @@ export default function Home() {
                 <div>
                   <h2 id="deck-editor-title">덱 편집</h2>
                 </div>
-                {deckEditorErrorMessage && <p className="deck-editor-message" role="status">{deckEditorErrorMessage}</p>}
+                <p className="deck-editor-message" role="status">{deckEditorMessage}</p>
                 <div className="deck-editor-header-costs">
                   <div className="deck-editor-sort" aria-label="카드 정렬 방식">
                     <button type="button" className={deckEditorSort === "cost" ? "is-active" : ""} onClick={() => setDeckEditorSort("cost")}>코스트 순</button>
@@ -8735,9 +8732,11 @@ export default function Home() {
                     </strong>
                   </div>
                   <div className="deck-editor-card-list" onWheel={scrollDeckEditorCardsHorizontally}>
-                    {inventoryConsumableGroups.map(({ consumable, consumableIds }) => {
-                      const consumableId = consumableIds.at(-1)!;
-                      return (
+                     {inventoryConsumableGroups.map(({ consumable, consumableIds }) => {
+                       const consumableId = consumableIds.at(-1)!;
+                       const bombIsArmed = consumable.type === "bombTicket"
+                         && consumable.armedMovesRemaining !== undefined;
+                       return (
                       <button
                         type="button"
                         className={`consumable-ticket inventory-ticket ${consumable.type} ${isConsumableSelected(consumable) ? "is-selected" : ""}`}
@@ -8759,16 +8758,19 @@ export default function Home() {
                           const bounds = event.currentTarget.getBoundingClientRect();
                           showConsumablePreview(consumable, bounds.right, bounds.top);
                         }}
-                        onBlur={() => setHoveredConsumable(null)}
-                        onClick={() => selectExtractionTicket(consumable)}
-                        onContextMenu={(event) => {
+                         onBlur={() => setHoveredConsumable(null)}
+                         onClick={() => selectExtractionTicket(consumable)}
+                         aria-pressed={isConsumableSelected(consumable)}
+                         onContextMenu={(event) => {
                           event.preventDefault();
                           moveInventoryConsumableToFloor(consumableId);
                         }}
                         aria-label={`${consumable.name} ${consumableIds.length}장`}
                       >
                         <strong>{consumable.name}</strong>
-                        <small>{consumable.description}</small>
+                        <small>{bombIsArmed
+                          ? `점화됨 · ${consumable.armedMovesRemaining}번 이동 후 폭발`
+                          : consumable.description}</small>
                         {consumableIds.length > 1 && <span className="inventory-card-count">x{consumableIds.length}</span>}
                       </button>
                       );
@@ -9058,6 +9060,8 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                     ))}
                     {floorConsumableGroups.map(({ consumable, consumableIds }) => {
                       const consumableId = consumableIds.at(-1)!;
+                      const bombIsArmed = consumable.type === "bombTicket"
+                        && consumable.armedMovesRemaining !== undefined;
                       return (
                       <button
                         type="button"
@@ -9084,10 +9088,13 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                         onClick={() => ["paintTicket", "cloneTicket", "extractTicket", "transformTicket", "bombTicket"].includes(consumable.type)
                           ? selectExtractionTicket(consumable)
                           : moveFloorConsumableToInventory(consumableId)}
+                        aria-pressed={isConsumableSelected(consumable)}
                         aria-label={`${consumable.name} ${consumableIds.length}장`}
                       >
                         <strong>{consumable.name}</strong>
-                        <small>{consumable.description}</small>
+                        <small>{bombIsArmed
+                          ? `점화됨 · ${consumable.armedMovesRemaining}번 이동 후 폭발`
+                          : consumable.description}</small>
                         {consumableIds.length > 1 && <span className="inventory-card-count">x{consumableIds.length}</span>}
                       </button>
                       );
