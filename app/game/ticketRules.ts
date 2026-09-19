@@ -52,3 +52,17 @@ export function consumeTicketById(
     floor: areas.floor.filter((item) => item.id !== ticketId),
   };
 }
+
+export function setBombTicketArmed(
+  ticketId: string,
+  armed: boolean,
+  areas: ConsumableAreas,
+) {
+  const update = (consumable: Consumable) => consumable.id === ticketId && consumable.type === "bombTicket"
+    ? { ...consumable, armedMovesRemaining: armed ? 3 : undefined }
+    : consumable;
+  return {
+    inventory: areas.inventory.map(update),
+    floor: areas.floor.map(update),
+  };
+}

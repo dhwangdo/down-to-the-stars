@@ -105,6 +105,7 @@ import {
   consumeTicketById as consumeTicketFromAreas,
   findTicketById as findTicketInAreas,
   groupConsumables,
+  setBombTicketArmed,
 } from "./game/ticketRules";
 import {
   createDeckName,
@@ -4437,19 +4438,26 @@ export default function Home() {
     }
     if (consumable.type === "bombTicket") {
       const cancelling = consumable.armedMovesRemaining !== undefined;
+      const roomKey = mapRoomKey(mapPosition);
+      const nextBombState = setBombTicketArmed(consumable.id, !cancelling, {
+        inventory: inventoryConsumablesRef.current,
+        floor: roomConsumableDrops[roomKey] ?? [],
+      });
       setArmedBombTicketIds((current) => {
         const next = new Set(current);
         if (cancelling) next.delete(consumable.id);
         else next.add(consumable.id);
         return next;
       });
-      setInventoryConsumables((current) => {
-        const next = current.map((item) => item.id === consumable.id
-          ? { ...item, armedMovesRemaining: cancelling ? undefined : 3 }
-          : item);
-        inventoryConsumablesRef.current = next;
-        return next;
-      });
+      inventoryConsumablesRef.current = nextBombState.inventory;
+      setInventoryConsumables(nextBombState.inventory);
+      setRoomConsumableDrops((current) => ({
+        ...current,
+        [roomKey]: setBombTicketArmed(consumable.id, !cancelling, {
+          inventory: inventoryConsumablesRef.current,
+          floor: current[roomKey] ?? [],
+        }).floor,
+      }));
       setPendingPaintTicketId(null);
       setPendingCloneTicketId(null);
       setPendingExtractTicketId(null);
@@ -9073,7 +9081,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                           showConsumablePreview(consumable, bounds.right, bounds.top);
                         }}
                         onBlur={() => setHoveredConsumable(null)}
-                        onClick={() => ["paintTicket", "cloneTicket", "extractTicket", "transformTicket"].includes(consumable.type)
+                        onClick={() => ["paintTicket", "cloneTicket", "extractTicket", "transformTicket", "bombTicket"].includes(consumable.type)
                           ? selectExtractionTicket(consumable)
                           : moveFloorConsumableToInventory(consumableId)}
                         aria-label={`${consumable.name} ${consumableIds.length}장`}

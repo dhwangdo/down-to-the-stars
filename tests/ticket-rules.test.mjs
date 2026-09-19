@@ -5,6 +5,7 @@ import {
   consumeTicketById,
   findTicketById,
   groupConsumables,
+  setBombTicketArmed,
 } from "../app/game/ticketRules.ts";
 
 const ticket = (id, type) => ({ id, type, name: type, description: type });
@@ -70,4 +71,16 @@ test("consuming a clone ticket before granting a copy keeps the source consumed"
 
   assert.equal(inventory.filter((item) => item.type === "cloneTicket").length, 3);
   assert.equal(inventory.filter((item) => item.type === "extractTicket").length, 5);
+});
+
+test("setBombTicketArmed updates a bomb ticket in either area", () => {
+  const areas = {
+    inventory: [ticket("inventory-bomb", "bombTicket")],
+    floor: [ticket("floor-bomb", "bombTicket")],
+  };
+  const armed = setBombTicketArmed("floor-bomb", true, areas);
+  assert.equal(armed.inventory[0].armedMovesRemaining, undefined);
+  assert.equal(armed.floor[0].armedMovesRemaining, 3);
+  const disarmed = setBombTicketArmed("floor-bomb", false, armed);
+  assert.equal(disarmed.floor[0].armedMovesRemaining, undefined);
 });
