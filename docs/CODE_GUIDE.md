@@ -156,7 +156,7 @@ setGame((current) => ({ ...current, energy: 2 }));
 3. `app/game/mapRules.ts`, `app/game/rewards.ts`, `app/game/battleState.ts`에서 지도·보상·전투 시작 규칙을 본다.
 4. `enemies.ts`의 `ENCOUNTERS`, `ENCOUNTER_INDICES_BY_REGION`, `BOSS_ENCOUNTER_INDICES`를 본다.
 5. `mapEnemies.ts`에서 적 인식과 이동 함수들을 본다.
-6. `rewards.ts`의 `createDeck`, `createRandomDeck`, `createBattleReward`를 찾아 덱과 보상 생성을 본다.
+6. `rewards.ts`의 `createDeck`, `createRegionDeck`, `generateDebugDecksByScore`, `createBattleReward`를 찾아 덱과 보상 생성을 본다.
 7. `Home()`의 `useState` 목록에서 실제로 보관하는 상태를 본다.
 8. `moveOnMap`에서 플레이어 이동→적 행동→충돌 순서를 본다.
 9. `playCard`, 카드 효과 처리, `moveCardToPile`, `endTurn`에서 전투 한 턴을 본다.

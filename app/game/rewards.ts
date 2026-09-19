@@ -12,9 +12,9 @@ import {
   createSoilCard,
   type Card,
   type CardBlueprint,
-} from "./cards";
-import { createDeckName } from "./randomNames";
-import { TICKET_TYPES } from "./shopRules";
+} from "./cards.ts";
+import { createDeckName } from "./randomNames.ts";
+import { TICKET_TYPES } from "./shopRules.ts";
 
 export type DeckEdition =
   | "clever"
@@ -25,7 +25,18 @@ export type DeckEdition =
   | "golden"
   | "rampaging"
   | "greedy"
-  | "frugal";
+  | "frugal"
+  | "drawPlus"
+  | "starPlus"
+  | "energyPlus"
+  | "persistentDraw"
+  | "frugalPlus"
+  | "defensiveStance"
+  | "firepower"
+  | "hammering"
+  | "deckHighlander"
+  | "starFive"
+  | "energyThree";
 
 export type DeckCase = {
   id: string;
@@ -144,35 +155,91 @@ export function createDebugAllCardsDeck(startId: number): { deck: DeckCase; next
 }
 
 export const DECK_EDITION_INFO: Record<DeckEdition, { name: string; description: string }> = {
-  clever: { name: "똑똑한", description: "전투 시작 시 ★을 추가로 2개 얻습니다." },
-  roomy: { name: "널널한", description: "전투 시작 시 빈 파일을 추가로 하나 가집니다." },
-  lively: { name: "활발한", description: "전투 시작 시 아드레날린 카드를 손에 넣습니다." },
-  fantastic: { name: "환상적인", description: "파일을 4장씩 쌓고, 덱 최대 장수가 10% 줄어듭니다." },
-  transparent: { name: "투명한", description: "파일 생성 시 첫 번째 파일의 카드를 모두 앞면으로 놓습니다." },
-  golden: { name: "황금의", description: "모든 희귀 카드를 앞면으로 놓습니다." },
-  rampaging: { name: "폭주하는", description: "턴 시작 에너지가 1 증가하고, 덱 최대 장수가 20% 줄어듭니다." },
-  greedy: { name: "탐욕스러운", description: "전투 보상으로 얻는 골드가 2배가 됩니다." },
-  frugal: { name: "알뜰한", description: "턴 종료 시 남은 에너지를 ★로 전환합니다." },
+  clever: { name: "별++", description: "전투 시작 시 ★ 2개를 획득합니다." },
+  roomy: { name: "추가 파일", description: "전투 시작 시 빈 파일을 1개 추가합니다." },
+  lively: { name: "아드레날린", description: "전투 시작 시 아드레날린 카드를 1장 획득합니다." },
+  fantastic: { name: "압축", description: "파일을 4장씩 쌓습니다." },
+  transparent: { name: "프리뷰", description: "파일 생성 시 첫 번째 파일의 카드를 모두 앞면으로 배치합니다." },
+  golden: { name: "희귀 감지", description: "모든 희귀 카드를 앞면으로 배치합니다." },
+  rampaging: { name: "지속 에너지", description: "최대 에너지가 1 증가합니다." },
+  greedy: { name: "탐욕", description: "전투 보상으로 얻는 골드가 2배가 됩니다." },
+  frugal: { name: "재활용", description: "턴 종료 시 남은 에너지 1당 ★ 1개를 획득합니다." },
+  drawPlus: { name: "드로우+", description: "전투 시작 시 무작위 파일에서 카드 1장을 뽑습니다." },
+  starPlus: { name: "별+", description: "전투 시작 시 ★ 1개를 획득합니다." },
+  energyPlus: { name: "에너지+", description: "전투 시작 시 에너지가 1 증가합니다." },
+  persistentDraw: { name: "지속 드로우", description: "매 턴 시작 시 무작위 파일에서 카드 1장을 뽑습니다." },
+  frugalPlus: { name: "재활용+", description: "턴 종료 시 남은 에너지 1당 ★ 2개를 획득합니다." },
+  defensiveStance: { name: "방호 태세", description: "전투 시작 시 방어도 5를 획득합니다." },
+  firepower: { name: "화력", description: "전투 시작 시 힘이 2 증가합니다." },
+  hammering: { name: "망치질", description: "카드를 재련할 때마다 ★ 1개를 획득합니다." },
+  deckHighlander: { name: "하이랜더", description: "전투 시작 시 중복 카드 없이 덱이 가득 차 있으면 최대 에너지가 1 증가합니다." },
+  starFive: { name: "별+++++", description: "전투 시작 시 ★ 5개를 획득합니다." },
+  energyThree: { name: "에너지+++", description: "전투 시작 시 에너지가 3 증가합니다." },
 };
 
-const EDITION_COLORS = ["#c63f3f", "#ba741d", "#4378c7", "#7650ae", "#21825f", "#bd3f7a"];
+export const DECK_EDITION_SCORES: Record<DeckEdition, number> = {
+  clever: 20,
+  roomy: 10,
+  lively: 50,
+  fantastic: 60,
+  transparent: 5,
+  golden: 5,
+  rampaging: 50,
+  greedy: 20,
+  frugal: 10,
+  drawPlus: 10,
+  starPlus: 10,
+  energyPlus: 20,
+  persistentDraw: 40,
+  frugalPlus: 40,
+  defensiveStance: 5,
+  firepower: 20,
+  hammering: 30,
+  deckHighlander: 30,
+  starFive: 50,
+  energyThree: 50,
+};
 
-export function rollDeckEditions(initialChance = 0.5): DeckEdition[] {
-  const remaining = Object.keys(DECK_EDITION_INFO) as DeckEdition[];
-  const editions: DeckEdition[] = [];
-  let chance = initialChance;
-  while (remaining.length > 0 && Math.random() < chance) {
-    const index = Math.floor(Math.random() * remaining.length);
-    editions.push(remaining.splice(index, 1)[0]);
-    chance -= 0.2;
-  }
-  return editions;
+const EDITION_COLORS: Record<DeckEdition, string> = {
+  clever: "#ef4444",
+  roomy: "#f97316",
+  lively: "#eab308",
+  fantastic: "#84cc16",
+  transparent: "#22c55e",
+  golden: "#14b8a6",
+  rampaging: "#06b6d4",
+  greedy: "#0ea5e9",
+  frugal: "#3b82f6",
+  drawPlus: "#6366f1",
+  starPlus: "#8b5cf6",
+  energyPlus: "#a855f7",
+  persistentDraw: "#d946ef",
+  frugalPlus: "#ec4899",
+  defensiveStance: "#f43f5e",
+  firepower: "#b91c1c",
+  hammering: "#c2410c",
+  deckHighlander: "#a16207",
+  starFive: "#15803d",
+  energyThree: "#0f766e",
+};
+
+export function getDeckEditionColor(edition: DeckEdition) {
+  return EDITION_COLORS[edition];
+}
+
+export function getAvailableDeckEditions(selected: readonly DeckEdition[]): DeckEdition[] {
+  const selectedSet = new Set(selected);
+  const hasRecyclingEdition = selectedSet.has("frugal") || selectedSet.has("frugalPlus");
+  return (Object.keys(DECK_EDITION_INFO) as DeckEdition[]).filter((edition) => (
+    !selectedSet.has(edition)
+      && (!hasRecyclingEdition || (edition !== "frugal" && edition !== "frugalPlus"))
+  ));
 }
 
 export function createEditionColors(editions: DeckEdition[]) {
   return Object.fromEntries(editions.map((edition) => [
     edition,
-    EDITION_COLORS[Math.floor(Math.random() * EDITION_COLORS.length)],
+    EDITION_COLORS[edition],
   ])) as Partial<Record<DeckEdition, string>>;
 }
 
@@ -180,39 +247,282 @@ export function createStarterDeck(): DeckCase {
   return { id: "starter", name: "", capacity: STARTER_DECK_CAPACITY, cards: createDeck(), editions: [], editionColors: {} };
 }
 
-function rollDeckTier(regionNumber: number) {
-  return regionNumber;
+export type DeckScoreBreakdown = {
+  editionScore: number;
+  cardScore: number;
+  capacityScore: number;
+  total: number;
+};
+
+export function calculateDeckCapacityScore(capacity: number) {
+  const fiveCardSteps = Math.max(0, Math.floor((capacity - 15) / 5));
+  return fiveCardSteps * 13;
 }
 
-export function createRandomDeck(regionNumber: number, startId: number, editionBonus = 0, capacityBonus = 0): DeckCase {
-  const tier = rollDeckTier(regionNumber);
-  const editions = rollDeckEditions(Math.min(1, 0.5 + editionBonus));
-  const capacityReduction = (editions.includes("fantastic") ? 0.1 : 0)
-    + (editions.includes("rampaging") ? 0.2 : 0);
-  const capacity = Math.round((20 + tier * 5) * (1 - capacityReduction)) + capacityBonus;
-  const cards: Card[] = [];
-  let nextId = startId;
-  for (let slot = 0; slot < capacity; slot += 1) {
-    const roll = Math.random();
-    let pool: CardBlueprint[] | null = null;
-    if (roll < 0.35) pool = null;
-    else if (roll < 0.5) pool = STARTER_CARD_POOL;
-    else if (roll < 0.7) pool = BASIC_CARD_POOL;
-    else if (roll < 0.98) pool = SPECIAL_CARD_POOL;
-    else pool = RARE_CARD_POOL;
-    if (!pool) continue;
-    const blueprint = pool[Math.floor(Math.random() * pool.length)];
-    cards.push({ ...blueprint, id: nextId, revealed: false });
-    nextId += 1;
-  }
+export function calculateDeckScore(deck: Pick<DeckCase, "capacity" | "cards" | "editions">): DeckScoreBreakdown {
+  const editionScore = deck.editions.reduce(
+    (total, edition) => total + DECK_EDITION_SCORES[edition],
+    0,
+  );
+  const cardScore = deck.cards.reduce((total, card) => (
+    total + (card.rarity === "rare" ? 8 : 0)
+  ), 0);
+  const capacityScore = calculateDeckCapacityScore(deck.capacity);
   return {
-    id: `found-r${regionNumber}-${startId}-${Math.random().toString(36).slice(2, 8)}`,
-    name: createDeckName(),
-    capacity,
-    cards,
-    editions,
-    editionColors: createEditionColors(editions),
+    editionScore,
+    cardScore,
+    capacityScore,
+    total: editionScore + cardScore + capacityScore,
   };
+}
+
+const DEBUG_DECK_STARTING_CAPACITY = 15;
+
+function randomItem<T>(pool: T[], random: () => number) {
+  const index = Math.min(pool.length - 1, Math.floor(Math.max(0, Math.min(0.999999999, random())) * pool.length));
+  return pool[index];
+}
+
+function sampleBinomial(trials: number, probability: number, random: () => number) {
+  let successes = 0;
+  for (let trial = 0; trial < trials; trial += 1) {
+    if (random() < probability) successes += 1;
+  }
+  return successes;
+}
+
+function sampleRandomizedBinomialWithMean(mean: number, random: () => number) {
+  if (mean <= 0) return 0;
+  const expectedTrials = mean * 5;
+  const baseTrials = Math.floor(expectedTrials);
+  const extraTrialProbability = expectedTrials - baseTrials;
+  const trials = baseTrials + (random() < extraTrialProbability ? 1 : 0);
+  return sampleBinomial(trials, 1 / 5, random);
+}
+
+function sampleGeneralizedPoisson(mean: number, theta: number, random: () => number) {
+  if (mean <= 0) return 0;
+
+  // E[X] = lambda / (1 - theta), so choose lambda to preserve the target mean.
+  const lambda = mean * (1 - theta);
+  const logMasses = [-lambda];
+  let logFactorial = 0;
+  for (let value = 1; ; value += 1) {
+    const shiftedLambda = lambda + theta * value;
+    if (shiftedLambda < 0) break;
+    if (shiftedLambda === 0 && value > 1) break;
+    logFactorial += Math.log(value);
+    logMasses.push(
+      Math.log(lambda)
+      + (value - 1) * Math.log(Math.max(Number.MIN_VALUE, shiftedLambda))
+      - shiftedLambda
+      - logFactorial,
+    );
+  }
+
+  const maxLogMass = Math.max(...logMasses);
+  const masses = logMasses.map((logMass) => Math.exp(logMass - maxLogMass));
+  const totalMass = masses.reduce((total, mass) => total + mass, 0);
+  let cursor = Math.max(0, Math.min(0.999999999, random())) * totalMass;
+  for (let value = 0; value < masses.length; value += 1) {
+    cursor -= masses[value];
+    if (cursor < 0) return value;
+  }
+  return masses.length - 1;
+}
+
+type DebugFillerKind = "empty" | "starter" | "basic" | "special";
+
+function createDebugFillerBag(size: number): DebugFillerKind[] {
+  return [
+    ...Array.from({ length: size / 4 }, () => "empty" as const),
+    ...Array.from({ length: size / 8 }, () => "starter" as const),
+    ...Array.from({ length: size * 3 / 8 }, () => "basic" as const),
+    ...Array.from({ length: size / 4 }, () => "special" as const),
+  ];
+}
+
+function takeRandomBagItem<T>(bag: T[], random: () => number) {
+  const index = Math.min(bag.length - 1, Math.floor(Math.max(0, Math.min(0.999999999, random())) * bag.length));
+  return bag.splice(index, 1)[0];
+}
+
+function chooseWeightedEdition(editions: DeckEdition[], random: () => number) {
+  const totalWeight = editions.reduce((total, edition) => total + DECK_EDITION_SCORES[edition] ** 1.2, 0);
+  let cursor = Math.max(0, Math.min(0.999999999, random())) * totalWeight;
+  for (const edition of editions) {
+    cursor -= DECK_EDITION_SCORES[edition] ** 1.2;
+    if (cursor < 0) return edition;
+  }
+  return editions.at(-1)!;
+}
+
+function sampleReducedCardBlueprints(pool: CardBlueprint[], count: number, random: () => number) {
+  if (count <= 0 || pool.length === 0) return [] as CardBlueprint[];
+  if (pool.length === 1) return Array.from({ length: count }, () => pool[0]);
+
+  const candidateCount = pool.length;
+  const uniformExpectedUnique = candidateCount * (1 - (1 - 1 / candidateCount) ** count);
+  const targetUnique = uniformExpectedUnique * (2 / 3);
+  let reducedCandidateCount = 1;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (let candidateSize = 1; candidateSize <= candidateCount; candidateSize += 1) {
+    const expectedUnique = candidateSize * (1 - (1 - 1 / candidateSize) ** count);
+    const distance = Math.abs(expectedUnique - targetUnique);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      reducedCandidateCount = candidateSize;
+    }
+  }
+
+  const shuffledPool = [...pool];
+  for (let index = 0; index < reducedCandidateCount; index += 1) {
+    const swapIndex = index + Math.floor(
+      Math.max(0, Math.min(0.999999999, random())) * (candidateCount - index),
+    );
+    [shuffledPool[index], shuffledPool[swapIndex]] = [shuffledPool[swapIndex], shuffledPool[index]];
+  }
+  const reducedPool = shuffledPool.slice(0, reducedCandidateCount);
+  return Array.from({ length: count }, () => reducedPool[
+    Math.floor(Math.max(0, Math.min(0.999999999, random())) * reducedPool.length)
+  ]);
+}
+
+function addDebugDeckCard(cards: Card[], blueprint: CardBlueprint, nextCardId: number) {
+  cards.push({ ...blueprint, id: nextCardId, revealed: false });
+  return nextCardId + 1;
+}
+
+type DebugDeckGenerationAttempt = {
+  deck: DeckCase | null;
+  nextCardId: number;
+};
+
+function generateDebugDeckAttempt(
+  startScore: number,
+  startCardId: number,
+  random: () => number,
+  capacityBonus = 0,
+): DebugDeckGenerationAttempt {
+  const rareMean = startScore / 100 * Math.min((100 + startScore) / 130, 2);
+  const rareCount = sampleRandomizedBinomialWithMean(rareMean, random);
+  const capacityIncreaseCount = sampleGeneralizedPoisson(startScore / 30, -0.5, random);
+  const capacity = DEBUG_DECK_STARTING_CAPACITY + capacityIncreaseCount * 5 + capacityBonus;
+  const cards: Card[] = [];
+  let nextCardId = startCardId;
+  if (rareCount > capacity) return { deck: null, nextCardId };
+  for (let index = 0; index < rareCount; index += 1) {
+    nextCardId = addDebugDeckCard(cards, randomItem(RARE_CARD_POOL, random), nextCardId);
+  }
+
+  let remainingScore = startScore
+    - rareCount * 8
+    - capacityIncreaseCount * 13;
+  if (remainingScore < -10) return { deck: null, nextCardId };
+
+  const editions: DeckEdition[] = [];
+  while (remainingScore >= 0) {
+    const availableEditions = getAvailableDeckEditions(editions)
+      .filter((edition) => DECK_EDITION_SCORES[edition] <= remainingScore);
+    if (availableEditions.length === 0) break;
+    const edition = chooseWeightedEdition(availableEditions, random);
+    editions.push(edition);
+    remainingScore -= DECK_EDITION_SCORES[edition];
+  }
+
+  const remainingSlots = capacity - cards.length;
+  const bagSize = Math.max(Math.floor((remainingSlots * 2) / 8) * 8, 8);
+  let fillerBag = createDebugFillerBag(bagSize);
+  const fillerKinds: DebugFillerKind[] = [];
+  for (let slot = 0; slot < remainingSlots; slot += 1) {
+    if (fillerBag.length === 0) fillerBag = createDebugFillerBag(bagSize);
+    fillerKinds.push(takeRandomBagItem(fillerBag, random));
+  }
+  const starterCards = sampleReducedCardBlueprints(
+    STARTER_CARD_POOL,
+    fillerKinds.filter((kind) => kind === "starter").length,
+    random,
+  );
+  const basicCards = sampleReducedCardBlueprints(
+    BASIC_CARD_POOL,
+    fillerKinds.filter((kind) => kind === "basic").length,
+    random,
+  );
+  let starterIndex = 0;
+  let basicIndex = 0;
+  for (const fillerKind of fillerKinds) {
+    if (fillerKind === "starter") {
+      nextCardId = addDebugDeckCard(cards, starterCards[starterIndex], nextCardId);
+      starterIndex += 1;
+    } else if (fillerKind === "basic") {
+      nextCardId = addDebugDeckCard(cards, basicCards[basicIndex], nextCardId);
+      basicIndex += 1;
+    } else if (fillerKind === "special") {
+      nextCardId = addDebugDeckCard(cards, randomItem(SPECIAL_CARD_POOL, random), nextCardId);
+    }
+  }
+
+  return {
+    nextCardId,
+    deck: {
+      id: `debug-score-${startCardId}`,
+      name: createDeckName(),
+      capacity,
+      cards,
+      editions,
+      editionColors: createEditionColors(editions),
+    },
+  };
+}
+
+export type DebugDeckGenerationResult = {
+  decks: DeckCase[];
+  attempted: number;
+  discarded: number;
+  nextCardId: number;
+};
+
+export function generateDebugDecksByScore(
+  startScore: number,
+  attemptCount: number,
+  startCardId: number,
+  random: () => number = Math.random,
+): DebugDeckGenerationResult {
+  const decks: DeckCase[] = [];
+  let nextCardId = startCardId;
+  let discarded = 0;
+  const attempted = Math.max(0, Math.floor(attemptCount));
+  const normalizedStartScore = Math.max(0, Math.floor(startScore));
+  for (let attempt = 0; attempt < attempted; attempt += 1) {
+    const result = generateDebugDeckAttempt(normalizedStartScore, nextCardId, random);
+    nextCardId = result.nextCardId;
+    if (!result.deck) {
+      discarded += 1;
+      continue;
+    }
+    decks.push(result.deck);
+  }
+  return { decks, attempted, discarded, nextCardId };
+}
+
+export function createRegionDeck(
+  regionNumber: number,
+  startId: number,
+  capacityBonus = 0,
+  random: () => number = Math.random,
+): DeckCase {
+  const startScore = Math.max(0, regionNumber * 30 + Math.floor(random() * 11) - 5);
+  let nextCardId = startId;
+  for (;;) {
+    const result = generateDebugDeckAttempt(startScore, nextCardId, random, capacityBonus);
+    nextCardId = result.nextCardId;
+    if (result.deck) {
+      return {
+        ...result.deck,
+        id: `found-r${regionNumber}-${startId}-${Math.random().toString(36).slice(2, 8)}`,
+      };
+    }
+  }
 }
 
 export function createConsumable(type: ConsumableType, id: string): Consumable {
@@ -232,7 +542,7 @@ export function createConsumable(type: ConsumableType, id: string): Consumable {
     return { id, type, name: "변환 티켓", description: "카드는 같은 희귀도의 다른 카드로, 티켓은 티어와 관계없이 다른 무작위 티켓으로 바꿉니다." };
   }
   if (type === "mapTicket") {
-    return { id, type, name: "지도 티켓", description: "같은 지역에서 가까운 상점·추출의 성소·건강의 성소 2곳을 밝힙니다." };
+    return { id, type, name: "지도 티켓", description: "같은 지역에서 아직 드러나지 않은 특수 지형 2곳을 밝힙니다." };
   }
   if (type === "cardPack") {
     return { id, type, name: "카드 팩", description: "카드 5개를 얻습니다." };
@@ -249,16 +559,15 @@ export function createBattleReward(
   regionNumber: number,
   nextCardId: number,
   deckDropChance: number,
-  ticketBonus = 0,
-  editionBonus = 0,
   capacityBonus = 0,
   rareCardChance = 0.05,
+  forceDeck = false,
 ) {
   const gold = 15 + Math.floor(Math.random() * 16);
-  const decks = Math.random() < deckDropChance
-    ? [createRandomDeck(regionNumber, nextCardId, editionBonus, capacityBonus)]
+  const decks = forceDeck || Math.random() < deckDropChance
+    ? [createRegionDeck(regionNumber, nextCardId, capacityBonus)]
     : [];
-  const consumableType = Math.random() < Math.min(1, 0.5 + ticketBonus)
+  const consumableType = Math.random() < 0.5
     ? consumableTypeFromRoll(Math.random())
     : null;
   return {

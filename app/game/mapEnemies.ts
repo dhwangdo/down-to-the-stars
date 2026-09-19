@@ -53,6 +53,10 @@ export function chebyshevDistance(left: GridPosition, right: GridPosition) {
   return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
 }
 
+function manhattanDistance(left: GridPosition, right: GridPosition) {
+  return Math.abs(left.x - right.x) + Math.abs(left.y - right.y);
+}
+
 export function isInPlayerVision(
   position: GridPosition,
   playerPosition: GridPosition,
@@ -158,6 +162,7 @@ type MovementOption = {
   position: GridPosition;
   distanceReduction: number;
   moved: boolean;
+  manhattanDistanceToPlayer: number;
 };
 
 type FlowEdge = {
@@ -188,16 +193,25 @@ function assignAlertedDestinations(
   const destinationOffset = enemyOffset + enemies.length;
   const sink = destinationOffset + destinationKeys.length;
   const graph: FlowEdge[][] = Array.from({ length: sink + 1 }, () => []);
-  const maximumReduction = Math.max(1, ...Array.from(optionsByEnemyId.values()).flat()
+  const allOptions = Array.from(optionsByEnemyId.values()).flat();
+  const maximumReduction = Math.max(1, ...allOptions
     .map((option) => option.distanceReduction));
-  const movementPriority = enemies.length * maximumReduction + 1;
+  const maximumManhattanDistance = Math.max(0, ...allOptions
+    .map((option) => option.manhattanDistanceToPlayer));
+  const distanceReductionPriority = enemies.length * maximumManhattanDistance + 1;
+  const movementPriority = enemies.length * (
+    maximumReduction * distanceReductionPriority + maximumManhattanDistance
+  ) + 1;
 
   enemies.forEach((enemy, enemyIndex) => {
     const enemyNode = enemyOffset + enemyIndex;
     addFlowEdge(graph, source, enemyNode, 0);
     for (const option of optionsByEnemyId.get(enemy.id) ?? []) {
       const destinationNode = destinationOffset + destinationIndex.get(positionKey(option.position))!;
-      const score = (option.moved ? movementPriority : 0) + option.distanceReduction;
+      const manhattanBonus = maximumManhattanDistance - option.manhattanDistanceToPlayer;
+      const score = (option.moved ? movementPriority : 0)
+        + option.distanceReduction * distanceReductionPriority
+        + manhattanBonus;
       addFlowEdge(graph, enemyNode, destinationNode, -score, option);
     }
   });
@@ -274,10 +288,12 @@ function awarenessAfterDetection(
   awareness: MapEnemyAwareness,
   distance: number,
   random: () => number,
+  detectionMultiplier: number,
 ) {
   if (awareness === "alerted" && distance >= 4) return "awake";
+  if (awareness === "awake" && distance >= 3 && random() < 0.03) return "sleeping";
   const detectionChance = distance === 1 ? 0.5 : distance === 2 ? 0.1 : 0;
-  if (detectionChance === 0 || random() >= detectionChance) return awareness;
+  if (detectionChance === 0 || random() / detectionMultiplier >= detectionChance) return awareness;
   if (awareness === "sleeping") return "awake";
   if (awareness === "awake") return "alerted";
   return awareness;
@@ -303,6 +319,11 @@ export function advanceMapEnemies(
     return { enemies: nextEnemies, collisionEnemyIds: existingColliders.map((enemy) => enemy.id) };
   }
 
+  const awarenessDistanceField = createEightDirectionDistanceField(
+    playerPosition,
+    isWalkable,
+    movementBounds,
+  );
   const alertedMovers: MapEnemy[] = [];
   const awakeMovers: MapEnemy[] = [];
   for (const enemy of nextEnemies) {
@@ -312,12 +333,15 @@ export function advanceMapEnemies(
       || chebyshevDistance(enemy.position, activeCenter) > MAP_ENEMY_ACTIVE_RADIUS
     ) continue;
 
-    const distanceAtStart = chebyshevDistance(enemy.position, playerPosition);
-    const nextAwareness = awarenessAfterDetection(
-      enemy.awareness,
-      distanceAtStart,
-      () => random() / detectionMultiplier,
-    );
+    const distanceAtStart = awarenessDistanceField.get(positionKey(enemy.position));
+    const nextAwareness = distanceAtStart === undefined
+      ? enemy.awareness
+      : awarenessAfterDetection(
+        enemy.awareness,
+        distanceAtStart,
+        random,
+        detectionMultiplier,
+      );
     if (nextAwareness !== enemy.awareness) {
       enemy.awareness = nextAwareness;
       continue;
@@ -350,6 +374,7 @@ export function advanceMapEnemies(
       position: { ...enemy.position },
       distanceReduction: 0,
       moved: false,
+      manhattanDistanceToPlayer: manhattanDistance(enemy.position, playerPosition),
     }];
     if (startDistance !== undefined) {
       for (const direction of EIGHT_DIRECTIONS) {
@@ -369,6 +394,7 @@ export function advanceMapEnemies(
           position: candidate,
           distanceReduction: startDistance - candidateDistance,
           moved: true,
+          manhattanDistanceToPlayer: manhattanDistance(candidate, playerPosition),
         });
       }
     }

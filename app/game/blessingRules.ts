@@ -1,7 +1,7 @@
 import type { Card } from "./cards";
 
 export type BlessingId =
-  | "vision" | "lightStep" | "sturdy" | "greed" | "bag" | "luck" | "deckSize" | "ninja"
+  | "vision" | "lightStep" | "sturdy" | "greed" | "bag" | "deckSize" | "ninja"
   | "swordShield" | "binaryStars" | "healingMileage" | "forbiddenKnowledge" | "gambling"
   | "oneMore" | "bombardier" | "transformer" | "mirror" | "goldRush" | "lightTicket"
   | "archaeologist" | "highlander" | "clairvoyance" | "blacksmith" | "packInsurance"
@@ -15,7 +15,6 @@ export const BLESSING_INFO: Record<BlessingOfferId, { name: string; description:
   sturdy: { name: "튼튼함", description: "최대 체력이 20 증가합니다." },
   greed: { name: "탐욕스러움", description: "골드 획득량이 2배가 됩니다." },
   bag: { name: "가방 업그레이드", description: "인벤토리 +12칸, 덱 슬롯 +1" },
-  luck: { name: "행운", description: "덱·티켓·에디션 확률 +10%p" },
   deckSize: { name: "덱 크기 +5", description: "모든 덱 최대 장수 +5" },
   ninja: { name: "닌자", description: "잠든 적과 전투 시 아드레날린 1장을 얻습니다." },
   swordShield: { name: "검과 방패", description: "전투 시작 시 힘 +1, 강인함 +1" },

@@ -109,6 +109,43 @@ test("waking up consumes a sleeping enemy's move", () => {
   assert.deepEqual(result.enemies[0].position, { x: 0, y: 0 });
 });
 
+test("unreachable enemies do not make an awareness check", () => {
+  const result = advanceMapEnemies(
+    [{ id: "blocked-sleeper", position: { x: 2, y: 0 }, encounterIndex: 0, awareness: "sleeping" }],
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    ({ x }) => x !== 1,
+    () => 0,
+    new Set(),
+    1,
+    { minX: 0, maxX: 2, minY: -1, maxY: 1 },
+  );
+  assert.equal(result.enemies[0].awareness, "sleeping");
+});
+
+test("awareness uses one-step diagonal distance from the distance field", () => {
+  const result = advanceMapEnemies(
+    [{ id: "diagonal-sleeper", position: { x: 2, y: 2 }, encounterIndex: 0, awareness: "sleeping" }],
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    alwaysWalkable,
+    () => 0,
+  );
+  assert.equal(result.enemies[0].awareness, "awake");
+});
+
+test("an unseen awake enemy has a 3 percent chance to fall asleep", () => {
+  const result = advanceMapEnemies(
+    [{ id: "unseen-wanderer", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "awake" }],
+    { x: 0, y: 0 },
+    { x: 3, y: 0 },
+    alwaysWalkable,
+    () => 0,
+  );
+  assert.equal(result.enemies[0].awareness, "sleeping");
+  assert.deepEqual(result.enemies[0].position, { x: 0, y: 0 });
+});
+
 test("an alerted enemy moves diagonally when that lowers L infinity distance", () => {
   const enemy = {
     id: "hunter",
@@ -125,6 +162,17 @@ test("an alerted enemy moves diagonally when that lowers L infinity distance", (
   );
   assert.deepEqual(result.enemies[0].position, { x: 1, y: 1 });
   assert.equal(chebyshevDistance(result.enemies[0].position, { x: 2, y: 2 }), 1);
+});
+
+test("an alerted enemy breaks tied distance-field moves with Manhattan distance", () => {
+  const result = advanceMapEnemies(
+    [{ id: "tie-breaker", position: { x: 0, y: 0 }, encounterIndex: 0, awareness: "alerted" }],
+    { x: 0, y: 0 },
+    { x: 3, y: 0 },
+    alwaysWalkable,
+    () => 0,
+  );
+  assert.deepEqual(result.enemies[0].position, { x: 1, y: 0 });
 });
 
 test("bosses stay alerted and stationary while still colliding with the player", () => {
@@ -156,7 +204,7 @@ test("an alerted enemy follows an eight-direction distance field around terrain"
   const result = advanceMapEnemies(
     [enemy],
     { x: 0, y: 0 },
-    { x: 3, y: 1 },
+    { x: 2, y: 2 },
     ({ x, y }) => !(x === 1 && y >= -1 && y <= 1),
     () => 0,
     new Set(),

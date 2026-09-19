@@ -26,6 +26,10 @@ export type RoomType =
   | "shrine"
   | "recoveryShrine"
   | "vitalityShrine"
+  | "mindEyeShrine"
+  | "transformShrine"
+  | "combinationShrine"
+  | "treasureChest"
   | "boss"
   | "portal"
   | "heal"
@@ -34,9 +38,15 @@ export type RoomType =
 export const REGION_COUNT = 7;
 export const ROCK_BARRIER_HEIGHT = 5;
 export const SPECIAL_NODE_CHANCE = 0.005;
-export const SHOP_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
-export const SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / 2;
-export const VITALITY_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / 2;
+const SPECIAL_NODE_WEIGHT_TOTAL = 0.5 + 1 + 0.5 + 1 + 1 + 1 + 0.5 + 0.01;
+export const SHOP_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const VITALITY_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const MIND_EYE_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const TRANSFORM_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const COMBINATION_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const TREASURE_CHEST_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const BLESSING_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.01 / SPECIAL_NODE_WEIGHT_TOTAL;
 export const PORTAL_NODE_CHANCE = 0.05;
 export const ROCK_CLUSTER_CHANCE = 0.03;
 export const ROCK_CLUSTER_EDGE_CHANCE = 0.05;
@@ -218,9 +228,7 @@ function isNormalDungeonFloor(position: MapPosition, seed: number) {
   if (localY === regionHeight(regionIndex) - 1 && isPortalColumn(position.x, regionIndex, seed)) return false;
   const portalEligible = localY === regionHeight(regionIndex) - 1;
   const availableChance = portalEligible ? 1 - PORTAL_NODE_CHANCE : 1;
-  return seededRoll(position, seed) >= (
-    SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE
-  ) / availableChance;
+  return seededRoll(position, seed) >= SPECIAL_NODE_CHANCE / availableChance;
 }
 
 function isRockClusterCell(position: MapPosition, seed: number) {
@@ -291,6 +299,11 @@ export function getRoomType(position: MapPosition, seed: number): RoomType {
       if (roll < SHOP_NODE_CHANCE / availableChance) return "shop";
       if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE) / availableChance) return "shrine";
       if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE) / availableChance) return "vitalityShrine";
+      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE) / availableChance) return "mindEyeShrine";
+      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE + TRANSFORM_SHRINE_NODE_CHANCE) / availableChance) return "transformShrine";
+      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE + TRANSFORM_SHRINE_NODE_CHANCE + COMBINATION_SHRINE_NODE_CHANCE) / availableChance) return "combinationShrine";
+      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE + TRANSFORM_SHRINE_NODE_CHANCE + COMBINATION_SHRINE_NODE_CHANCE + TREASURE_CHEST_NODE_CHANCE) / availableChance) return "treasureChest";
+      if (roll < SPECIAL_NODE_CHANCE / availableChance) return "blessing";
       if (!isAdjacentToSafeAreaBoundary(position, seed) && isRockClusterCell(position, seed)) return "rock";
       return "empty";
     }

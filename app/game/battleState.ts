@@ -58,6 +58,7 @@ export type GameState = {
   reflectDamage: number;
   playerThorns: number;
   highlanderActive: boolean;
+  deckHighlanderActive: boolean;
   blacksmithForgeUsedThisTurn: boolean;
   clairvoyanceActive: boolean;
   toxicSlimeAdded: boolean;
@@ -211,6 +212,7 @@ export function waitingState(
     reflectDamage: 0,
     playerThorns: 0,
     highlanderActive: false,
+    deckHighlanderActive: false,
     blacksmithForgeUsedThisTurn: false,
     clairvoyanceActive: false,
     toxicSlimeAdded: false,
@@ -244,13 +246,23 @@ export function dealtState(
     ? [createRelicCard(-10000)]
     : [];
   if (encounterTokens.length > 0) initialPiles[0].unshift(encounterTokens[0]);
+  const startingDraw = deckEditions.includes("drawPlus")
+    ? drawRandomFromPiles(initialPiles, 1)
+    : { piles: initialPiles, hand: [] as Card[] };
   return {
     ...waitingState(playerHp, enemies),
-    piles: initialPiles,
-    hand: deckEditions.includes("lively") ? [createAdrenalineCard()] : [],
+    piles: startingDraw.piles,
+    hand: [
+      ...startingDraw.hand,
+      ...(deckEditions.includes("lively") ? [createAdrenalineCard()] : []),
+    ],
     initialDeck: [...deck, ...encounterTokens].map((card) => ({ ...card, revealed: false })),
-    energy: deckEditions.includes("rampaging") ? 4 : 3,
-    stars: deckEditions.includes("clever") ? 4 : 2,
+    energy: (deckEditions.includes("rampaging") ? 4 : 3)
+      + (deckEditions.includes("energyPlus") ? 1 : 0)
+      + (deckEditions.includes("energyThree") ? 3 : 0),
+    stars: (deckEditions.includes("clever") ? 4 : 2)
+      + (deckEditions.includes("starPlus") ? 1 : 0)
+      + (deckEditions.includes("starFive") ? 5 : 0),
     deckEditions,
     evenDealOnReshuffle: false,
     preserveDefenseOnTurnEnd: false,
