@@ -1287,6 +1287,7 @@ function CardFace({
   defenseMultiplier = 1,
   ruleCostReduction = 0,
   forgeCount = 0,
+  radiancePlayedThisTurn = 0,
 }: {
   card: Card;
   starsSpent?: number;
@@ -1295,12 +1296,13 @@ function CardFace({
   defenseMultiplier?: number;
   ruleCostReduction?: number;
   forgeCount?: number;
+  radiancePlayedThisTurn?: number;
 }) {
   const cardEffectRef = useRef<HTMLSpanElement | null>(null);
   const displayedCost = UNPLAYABLE_CARD_EFFECTS.has(card.effect)
     ? "-"
     : cardEnergyCost(card, ruleCostReduction, forgeCount);
-  const damageValue = calculateCardDamage(card, strength);
+  const damageValue = calculateCardDamage(card, strength, 0, radiancePlayedThisTurn);
   const defenseValue = calculateDefenseGain(card, { agility, defenseMultiplier });
   const defenseBaseValue = getDefenseBaseValue(card);
   const damageNumber = changedNumber(damageValue, card.value);
@@ -1331,7 +1333,7 @@ function CardFace({
     const observer = new ResizeObserver(updateEffectShift);
     observer.observe(effect);
     return () => observer.disconnect();
-  }, [card.id, card.effect, card.value, card.forged, card.forgeCostsCompleted?.join(","), starsSpent, strength, agility, defenseMultiplier]);
+  }, [card.id, card.effect, card.value, card.forged, card.forgeCostsCompleted?.join(","), starsSpent, strength, agility, defenseMultiplier, radiancePlayedThisTurn]);
   const effectText = (() => {
     switch (card.effect) {
       case "strike":
@@ -1415,7 +1417,7 @@ function CardFace({
       case "opticsResearch":
         return <span>매 플레이어 턴 시작 시 <strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span>;
       case "radiance":
-        return <span><span className="effect-type damage">피해</span>를 4 줍니다. 이번 턴에 사용한 다른 <strong className="effect-keyword">광채</strong>마다 피해를 4 더 줍니다.</span>;
+        return <span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다. 이번 턴 동안 <strong className="effect-keyword">광채</strong>의 피해량이 4 증가합니다.</span>;
       case "lightCluster":
         return <span><strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span>;
       case "largePrism":
@@ -9864,7 +9866,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                       onMouseLeave={faceUp ? () => { setHoveredDeckCard(null); clearCardKeywordHover(); } : undefined}
                       onBlur={faceUp ? () => { setHoveredDeckCard(null); clearCardKeywordHover(); } : undefined}
                     >
-                      {faceUp ? <CardFace card={card} strength={game.strength + combatManualBonus} agility={game.agility + combatManualBonus} defenseMultiplier={game.defenseMultiplier} ruleCostReduction={lawResearchCount} forgeCount={game.forgeCount} /> : <span className={`card-back-pattern ${card.colored ? "is-painted" : ""}`} />}
+                      {faceUp ? <CardFace card={card} strength={game.strength + combatManualBonus} agility={game.agility + combatManualBonus} defenseMultiplier={game.defenseMultiplier} ruleCostReduction={lawResearchCount} forgeCount={game.forgeCount} radiancePlayedThisTurn={game.radiancePlayedThisTurn} /> : <span className={`card-back-pattern ${card.colored ? "is-painted" : ""}`} />}
                     </div>
                   );
                 })}
@@ -10059,7 +10061,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                 disabled={controlsLocked && game.pendingDiscards === 0}
                 aria-label={UNPLAYABLE_CARD_EFFECTS.has(card.effect) ? `${card.name}, 비용 -, 사용 불가` : `${card.name}, 에너지 ${cardEnergyCost(card, lawResearchCount, game.forgeCount)}`}
               >
-                <CardFace card={card} starsSpent={game.starsSpent} strength={game.strength + combatManualBonus} agility={game.agility + combatManualBonus} defenseMultiplier={game.defenseMultiplier} ruleCostReduction={lawResearchCount} forgeCount={game.forgeCount} />
+                <CardFace card={card} starsSpent={game.starsSpent} strength={game.strength + combatManualBonus} agility={game.agility + combatManualBonus} defenseMultiplier={game.defenseMultiplier} ruleCostReduction={lawResearchCount} forgeCount={game.forgeCount} radiancePlayedThisTurn={game.radiancePlayedThisTurn} />
               </button>
               ) : <div className="hand-card-placeholder" aria-hidden="true" key={`clear-slot-${index}`} style={handFanStyle(index)} />)}
             {game.hand.length === 0 && phase === "playing" && game.status === "playing" && (
@@ -10190,7 +10192,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                 }}
                 key={card.id}
               >
-                <CardFace card={card} strength={game.strength + combatManualBonus} agility={game.agility + combatManualBonus} defenseMultiplier={game.defenseMultiplier} ruleCostReduction={lawResearchCount} forgeCount={game.forgeCount} />
+                <CardFace card={card} strength={game.strength + combatManualBonus} agility={game.agility + combatManualBonus} defenseMultiplier={game.defenseMultiplier} ruleCostReduction={lawResearchCount} forgeCount={game.forgeCount} radiancePlayedThisTurn={game.radiancePlayedThisTurn} />
               </div>
             ))}
           </div>
