@@ -24,6 +24,8 @@ export type GameState = {
   pendingPileDrawCount: number;
   /** 질주: 원하는 파일 1장 뒤에 자동으로 뽑을 무작위 파일 수. */
   pendingDashRandomDraws: number;
+  /** 광행시간: 다음 플레이어 턴 시작 시 생성할 광채 수. */
+  pendingRadiance: number;
   /** 연구 룰 카드의 추가 드로우 선택 상태. */
   pendingResearchDraw: "astronomy" | "necromancy" | null;
   astronomyResearchUses: number;
@@ -40,6 +42,8 @@ export type GameState = {
   playerPhysicalVulnerability: number;
   playerMagicVulnerability: number;
   strength: number;
+  /** 여백의 미가 현재 빈 파일 수에 따라 제공 중인 힘 보너스. */
+  whiteSpaceStrengthBonus: number;
   temporaryStrength: number;
   agility: number;
   defenseMultiplier: number;
@@ -183,6 +187,7 @@ export function waitingState(
     pendingDraws: 0,
     pendingPileDrawCount: 0,
     pendingDashRandomDraws: 0,
+    pendingRadiance: 0,
     pendingResearchDraw: null,
     astronomyResearchUses: 0,
     necromancyResearchUses: 0,
@@ -198,6 +203,7 @@ export function waitingState(
     playerPhysicalVulnerability: 0,
     playerMagicVulnerability: 0,
     strength: 0,
+    whiteSpaceStrengthBonus: 0,
     temporaryStrength: 0,
     agility: 0,
     defenseMultiplier: 1,

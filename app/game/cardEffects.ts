@@ -101,7 +101,7 @@ export function getCardKeywordInfos(card: Card): CardKeywordInfo[] {
   if (CARD_POOL_STAR_EFFECTS.has(card.effect) || ["grimoire", "meteor", "supernova"].includes(card.effect)) add("★");
   if (["warmUp", "weaponSharpen", "augment", "orion", "combatManual", "relic", "transcend"].includes(card.effect)) add("힘");
   if (["augment", "armorSharpen", "combatManual"].includes(card.effect)) add("강인함");
-  if (["radiance", "lightCluster", "largePrism", "opticsResearch"].includes(card.effect)) add("광채");
+  if (["radiance", "lightCluster", "largePrism", "opticsResearch", "nebula", "lightTravelTime"].includes(card.effect)) add("광채");
   return keywords
     .map((name) => ({
       name,

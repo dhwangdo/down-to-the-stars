@@ -33,6 +33,11 @@ export type DeckEdition =
   | "frugalPlus"
   | "defensiveStance"
   | "firepower"
+  | "growth"
+  | "resistance"
+  | "giant"
+  | "whiteSpace"
+  | "invincible"
   | "hammering"
   | "deckHighlander"
   | "starFive"
@@ -171,6 +176,11 @@ export const DECK_EDITION_INFO: Record<DeckEdition, { name: string; description:
   frugalPlus: { name: "재활용+", description: "턴 종료 시 남은 에너지 1당 ★ 2개를 획득합니다." },
   defensiveStance: { name: "방호 태세", description: "전투 시작 시 방어도 5를 획득합니다." },
   firepower: { name: "화력", description: "전투 시작 시 힘이 2 증가합니다." },
+  growth: { name: "성장", description: "매 턴 시작 시 힘이 1 증가합니다." },
+  resistance: { name: "저항", description: "전투 시작 시 물리 저항 1과 마법 저항 1을 획득합니다." },
+  giant: { name: "거인", description: "전투 시작 시 힘 3과 강인함 3을 획득합니다." },
+  whiteSpace: { name: "여백의 미", description: "현재 빈 파일 하나당 힘 2를 획득합니다." },
+  invincible: { name: "무적", description: "전투 시작 시 무적 1을 획득합니다." },
   hammering: { name: "망치질", description: "카드를 재련할 때마다 ★ 1개를 획득합니다." },
   deckHighlander: { name: "하이랜더", description: "전투 시작 시 중복 카드 없이 덱이 가득 차 있으면 최대 에너지가 1 증가합니다." },
   starFive: { name: "별+++++", description: "전투 시작 시 ★ 5개를 획득합니다." },
@@ -194,6 +204,11 @@ export const DECK_EDITION_SCORES: Record<DeckEdition, number> = {
   frugalPlus: 40,
   defensiveStance: 5,
   firepower: 20,
+  growth: 35,
+  resistance: 30,
+  giant: 50,
+  whiteSpace: 30,
+  invincible: 100,
   hammering: 30,
   deckHighlander: 30,
   starFive: 50,
@@ -217,6 +232,11 @@ const EDITION_COLORS: Record<DeckEdition, string> = {
   frugalPlus: "#ec4899",
   defensiveStance: "#f43f5e",
   firepower: "#b91c1c",
+  growth: "#f59e0b",
+  resistance: "#64748b",
+  giant: "#7c3aed",
+  whiteSpace: "#115e59",
+  invincible: "#be123c",
   hammering: "#c2410c",
   deckHighlander: "#a16207",
   starFive: "#15803d",

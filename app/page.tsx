@@ -1416,6 +1416,14 @@ function CardFace({
         return <span><strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span>;
       case "largePrism":
         return <span><strong className="effect-keyword">광채</strong>를 3장 가져옵니다.</span>;
+      case "nebula":
+        return <><span><strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span><span><span className="effect-star">★★</span>를 얻습니다.</span></>;
+      case "lightTravelTime":
+        return <span>다음 턴 시작 시 <strong className="effect-keyword">광채</strong>를 2장 가져옵니다.</span>;
+      case "wolfTalisman":
+        return <span>지니고 있는 동안 <strong className="effect-keyword">힘</strong>을 1 얻습니다. (중복 불가)</span>;
+      case "turtleTalisman":
+        return <span>지니고 있는 동안 <strong className="effect-keyword">강인함</strong>을 1 얻습니다. (중복 불가)</span>;
       case "lawResearch":
         return <span>내 <strong className="effect-keyword">룰</strong> 카드의 비용이 1 감소합니다. 비용은 0보다 낮아지지 않습니다.</span>;
       case "mirrorImage":
@@ -1824,6 +1832,20 @@ export default function Home() {
   const [shrineDeckSort, setShrineDeckSort] = useState<"cost" | "rarity">("rarity");
   const [deckPreviewPosition, setDeckPreviewPosition] = useState({ x: 0, y: 0 });
   const [game, setGame] = useState<GameState>(waitingState);
+
+  useLayoutEffect(() => {
+    setGame((current) => {
+      const nextBonus = current.deckEditions.includes("whiteSpace")
+        ? current.piles.filter((pile) => pile.length === 0).length * 2
+        : 0;
+      if (current.whiteSpaceStrengthBonus === nextBonus) return current;
+      return {
+        ...current,
+        strength: current.strength - current.whiteSpaceStrengthBonus + nextBonus,
+        whiteSpaceStrengthBonus: nextBonus,
+      };
+    });
+  }, [game.piles, game.deckEditions, game.whiteSpaceStrengthBonus]);
   const [telemetry] = useState(() => createTelemetryRecorder());
   const telemetryPreviousGameRef = useRef<GameState | null>(null);
   const [telemetryMessage, setTelemetryMessage] = useState("");
@@ -2541,8 +2563,9 @@ export default function Home() {
         pendingEnemyTokenIdsRef.current.add(card.id);
       });
       const opticalResearchCount = current.activeRuleCards.filter((card) => card.effect === "opticsResearch").length;
+      const nextTurnRadianceCount = opticalResearchCount + current.pendingRadiance;
       const opticalRadiances = Array.from(
-        { length: opticalResearchCount },
+        { length: nextTurnRadianceCount },
         () => createRadianceCard(nextCardIdRef.current++),
       );
       return {
@@ -2565,6 +2588,7 @@ export default function Home() {
         pendingDraws: 0,
         pendingPileDrawCount: 0,
         pendingDashRandomDraws: 0,
+        pendingRadiance: 0,
         pendingResearchDraw: null,
         pendingDiscards: 0,
         pendingSweep: false,
@@ -2574,9 +2598,10 @@ export default function Home() {
             ? 5
             : 0,
         playerMagicBlock: current.preserveDefenseOnTurnEnd ? current.playerMagicBlock : 0,
+        strength: current.strength + (current.deckEditions.includes("growth") ? 1 : 0),
         defenseMultiplier: 1,
         damageTakenMultiplier: 1,
-        invulnerable: false,
+        invulnerable: current.turn === 1 && current.deckEditions.includes("invincible"),
         toxicSlimeAdded: current.toxicSlimeAdded || toxicSlimes.length > 0,
         message: clearedAllPiles ? "CLEAR! 새 파일을 배치합니다."
           : toxicSlimes.length > 0
@@ -2686,6 +2711,12 @@ export default function Home() {
       setScreen("battle");
       return;
     }
+    const heldCards = [
+      ...inventoryCards,
+      ...ownedDecks.flatMap((deck) => deck.cards),
+    ];
+    const hasWolfTalisman = heldCards.some((card) => card.effect === "wolfTalisman");
+    const hasTurtleTalisman = heldCards.some((card) => card.effect === "turtleTalisman");
     const dealtGame = dealtState(
       playerHp,
       battleDeck.cards,
@@ -2697,6 +2728,7 @@ export default function Home() {
     const deckHighlanderActive = battleDeck.editions.includes("deckHighlander")
       && battleDeck.cards.length >= battleDeck.capacity
       && hasUniqueCardEffects(battleDeck.cards);
+    const startingResistance = !blessings.includes("glassCannon") && battleDeck.editions.includes("resistance") ? 1 : 0;
     const nextGame = {
       ...dealtGame,
       hand: blessings.includes("ninja") && encounters.some((encounter) => encounter.awareness === "sleeping")
@@ -2704,8 +2736,16 @@ export default function Home() {
         : dealtGame.hand,
       strength: dealtGame.strength
         + (blessings.includes("swordShield") ? 1 : 0)
-        + (battleDeck.editions.includes("firepower") ? 2 : 0),
-      agility: dealtGame.agility + (blessings.includes("swordShield") ? 1 : 0),
+        + (battleDeck.editions.includes("firepower") ? 2 : 0)
+        + (battleDeck.editions.includes("giant") ? 3 : 0)
+        + (hasWolfTalisman ? 1 : 0),
+      agility: dealtGame.agility
+        + (blessings.includes("swordShield") ? 1 : 0)
+        + (battleDeck.editions.includes("giant") ? 3 : 0)
+        + (hasTurtleTalisman ? 1 : 0),
+      playerPhysicalResistance: dealtGame.playerPhysicalResistance + startingResistance,
+      playerMagicResistance: dealtGame.playerMagicResistance + startingResistance,
+      invulnerable: battleDeck.editions.includes("invincible"),
       stars: dealtGame.stars + (blessings.includes("binaryStars") ? 2 : 0) + (highlanderActive ? 1 : 0),
       energy: dealtGame.energy
         + (blessings.includes("glassCannon") ? 1 : 0)
@@ -5614,7 +5654,9 @@ export default function Home() {
         ? Math.min(card.draw * repetitions, availableCardCount)
         : 0;
       const remainingHand = current.hand.filter((item) => item.id !== card.id);
-      const radianceCount = card.effect === "lightCluster" ? 1 : card.effect === "largePrism" ? 3 : 0;
+      const radianceCount = card.effect === "lightCluster" || card.effect === "nebula"
+        ? 1
+        : card.effect === "largePrism" ? 3 : 0;
       const generatedRadiances = Array.from(
         { length: radianceCount },
         () => createRadianceCard(nextCardIdRef.current++),
@@ -5649,6 +5691,8 @@ export default function Home() {
         if (card.effect === "opticsResearch") return "광학 연구: 턴 시작마다 광채 생성";
         if (card.effect === "lightCluster") return "빛무리: 광채 1장 획득";
         if (card.effect === "largePrism") return "대형 프리즘: 광채 3장 획득";
+        if (card.effect === "nebula") return "성운: 광채 1장 획득 · ★★ 획득";
+        if (card.effect === "lightTravelTime") return "광행시간: 다음 턴 시작 시 광채 2장 획득";
         if (card.effect === "radiance") return `${targetEnemy?.name}에게 광채 피해 ${damage}`;
         if (card.effect === "lawResearch") return "법학 연구: 룰 카드 비용 감소";
         if (card.effect === "mirrorImage") return "거울상: 방어와 마법 방어 교환";
@@ -5710,6 +5754,8 @@ export default function Home() {
               ? repetitions
               : card.effect === "starlight"
                 ? card.value
+            : card.effect === "nebula"
+              ? 2
             : card.effect === "starGuard"
                 ? 1
               : card.effect === "starArk"
@@ -5727,6 +5773,7 @@ export default function Home() {
         pendingDraws: drawsAdded,
         pendingPileDrawCount,
         pendingDashRandomDraws,
+        pendingRadiance: current.pendingRadiance + (card.effect === "lightTravelTime" ? 2 : 0),
         pendingDiscards,
         pendingSweep,
         pendingPileOperation,

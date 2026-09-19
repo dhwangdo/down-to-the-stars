@@ -32,6 +32,8 @@ export type CardEffect =
   | "radiance"
   | "lightCluster"
   | "largePrism"
+  | "nebula"
+  | "lightTravelTime"
   | "mirrorImage"
   | "blessing"
   | "odinSpear"
@@ -78,7 +80,9 @@ export type CardEffect =
   | "aries"
   | "hydra"
   | "orion"
-  | "cassiopeia";
+  | "cassiopeia"
+  | "wolfTalisman"
+  | "turtleTalisman";
 
 export type Card = {
   id: number;
@@ -132,7 +136,9 @@ export function isAttackCard(card: { kind: CardKind; effect: CardEffect }) {
 }
 
 export const HAND_PASSIVE_EFFECTS = new Set<CardEffect>(["combatManual", "grimoire"]);
-export const UNPLAYABLE_CARD_EFFECTS = new Set<CardEffect>(["slime", "soil", "rock", "combatManual", "grimoire"]);
+export const UNPLAYABLE_CARD_EFFECTS = new Set<CardEffect>([
+  "slime", "soil", "rock", "combatManual", "grimoire", "wolfTalisman", "turtleTalisman",
+]);
 
 export const STARTER_CARD_POOL: CardBlueprint[] = [
   { kind: "strike", effect: "strike", rarity: "starter", name: "타격", cost: 1, value: 6, draw: 0, damageType: "physical" },
@@ -160,8 +166,9 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "astronomyResearch", rarity: "special", name: "천문학 연구", cost: 1, value: 3, draw: 0, damageType: "physical", forgeCost: 2, exhaust: true, rule: true },
   { kind: "skill", effect: "necromancyResearch", rarity: "special", name: "강령학 연구", cost: 1, value: 3, draw: 0, damageType: "physical", forgeCost: 2, exhaust: true, rule: true },
   { kind: "skill", effect: "metallurgyResearch", rarity: "special", name: "금속학 연구", cost: 1, value: 1, draw: 0, damageType: "physical", exhaust: true, rule: true },
-  { kind: "skill", effect: "lightCluster", rarity: "special", name: "빛무리", cost: 1, value: 1, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "lightCluster", rarity: "special", name: "빛무리", cost: 0, value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "largePrism", rarity: "special", name: "대형 프리즘", cost: 3, value: 3, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "nebula", rarity: "special", name: "성운", cost: 1, value: 2, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "warmUp", rarity: "special", name: "준비 운동", cost: 0, value: 4, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "starlight", rarity: "special", name: "별빛", cost: 0, value: 2, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "iceShield", rarity: "special", name: "얼음 방패", cost: 1, value: 11, draw: 0, damageType: "magic" },
@@ -199,7 +206,10 @@ export const RARE_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "lawResearch", rarity: "rare", name: "법학 연구", cost: 2, value: 1, draw: 0, damageType: "physical", exhaust: true, rule: true },
   { kind: "skill", effect: "economicsResearch", rarity: "rare", name: "경제학 연구", cost: 2, value: 3, draw: 0, damageType: "physical", exhaust: true, rule: true },
   { kind: "skill", effect: "opticsResearch", rarity: "rare", name: "광학 연구", cost: 1, value: 1, draw: 0, damageType: "physical", exhaust: true, rule: true },
+  { kind: "skill", effect: "lightTravelTime", rarity: "rare", name: "광행시간", cost: 1, value: 2, draw: 0, damageType: "physical" },
   { kind: "strike", effect: "odinSpear", rarity: "rare", name: "오딘의 창", cost: 6, value: 40, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "wolfTalisman", rarity: "rare", name: "늑대 부적", value: 1, draw: 0, damageType: "physical" },
+  { kind: "skill", effect: "turtleTalisman", rarity: "rare", name: "거북이 부적", value: 1, draw: 0, damageType: "physical" },
 ];
 
 export const LEGENDARY_CARD_POOL: CardBlueprint[] = [
@@ -249,10 +259,10 @@ export const CARD_POOL_DEFENSE_EFFECTS = new Set<CardEffect>([
   "defend", "deflect", "iceShield", "waterWave", "plateArmorDefense", "starGuard", "starArk", "ironWall", "ironWave", "ironRampage", "suppression", "odinSpear",
 ]);
 export const CARD_POOL_STAR_EFFECTS = new Set<CardEffect>([
-  "battlePlan", "rulerCompass", "starlight", "starGuard", "starArk", "superStrategist", "flood", "aries", "astronomyResearch", "necromancyResearch", "elimination",
+  "battlePlan", "rulerCompass", "starlight", "starGuard", "starArk", "superStrategist", "flood", "aries", "astronomyResearch", "necromancyResearch", "elimination", "nebula",
 ]);
 export const CARD_POOL_STATUS_EFFECTS = new Set<CardEffect>([
-  "steelHeart", "warmUp", "rapidFire", "counter", "weaponSharpen", "armorSharpen", "supernova", "blessing", "mirrorImage",
+  "steelHeart", "warmUp", "rapidFire", "counter", "weaponSharpen", "armorSharpen", "supernova", "blessing", "mirrorImage", "lightTravelTime", "wolfTalisman", "turtleTalisman",
 ]);
 
 type DefenseCardLike = Pick<CardBlueprint, "effect" | "damageType">;

@@ -14,10 +14,10 @@ import {
 test("card pools preserve the current content counts", () => {
   assert.equal(STARTER_CARD_POOL.length, 3);
   assert.equal(BASIC_CARD_POOL.length, 8);
-  assert.equal(SPECIAL_CARD_POOL.length, 27);
-  assert.equal(RARE_CARD_POOL.length, 13);
+  assert.equal(SPECIAL_CARD_POOL.length, 28);
+  assert.equal(RARE_CARD_POOL.length, 16);
   assert.equal(LEGENDARY_CARD_POOL.length, 6);
-  assert.equal(ALL_CARD_BLUEPRINTS.length, 58);
+  assert.equal(ALL_CARD_BLUEPRINTS.length, 62);
 });
 
 test("current card data keeps key balance values and removed systems absent", () => {
@@ -52,10 +52,11 @@ test("current card data keeps key balance values and removed systems absent", ()
   assert.equal(oldCore?.cost, 0);
   assert.equal(oldCore?.exhaust, true);
   assert.deepEqual(
-    SPECIAL_CARD_POOL.filter((card) => ["빛무리", "대형 프리즘"].includes(card.name)).map(({ name, cost, value }) => ({ name, cost, value })),
+    SPECIAL_CARD_POOL.filter((card) => ["빛무리", "대형 프리즘", "성운"].includes(card.name)).map(({ name, cost, value }) => ({ name, cost, value })),
     [
-      { name: "빛무리", cost: 1, value: 1 },
+      { name: "빛무리", cost: 0, value: 1 },
       { name: "대형 프리즘", cost: 3, value: 3 },
+      { name: "성운", cost: 1, value: 2 },
     ],
   );
   assert.deepEqual(
@@ -71,5 +72,14 @@ test("current card data keeps key balance values and removed systems absent", ()
     { name: "광채", cost: 0, value: 4, token: true },
   );
   assert.equal(RARE_CARD_POOL.find((card) => card.name === "오딘의 창")?.value, 40);
+  assert.deepEqual(
+    RARE_CARD_POOL.filter((card) => ["광행시간", "늑대 부적", "거북이 부적"].includes(card.name))
+      .map(({ name, cost, value }) => ({ name, cost, value })),
+    [
+      { name: "광행시간", cost: 1, value: 2 },
+      { name: "늑대 부적", cost: undefined, value: 1 },
+      { name: "거북이 부적", cost: undefined, value: 1 },
+    ],
+  );
   assert.equal(ALL_CARD_BLUEPRINTS.some((card) => card.name === "발광"), false);
 });
