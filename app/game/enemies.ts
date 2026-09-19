@@ -188,13 +188,13 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "골렘",
-      hp: 80,
-      maxHp: 80,
+      hp: 90,
+      maxHp: 90,
       actions: [
-        { name: "...", attacks: [], cycle: true },
-        { name: "...!", attacks: [], cycle: true },
+        { name: "...", attacks: [{ type: "physical", value: 8 }], cycle: true },
+        { name: "...!", attacks: [{ type: "physical", value: 8 }], cycle: true },
         { name: "공격", attacks: [{ type: "physical", value: 30 }], cycle: true },
-        { name: "...", attacks: [], cycle: true },
+        { name: "...", attacks: [{ type: "physical", value: 8 }], cycle: true },
         { name: "공격", attacks: [{ type: "physical", value: 30 }], cycle: true, loopTo: 3 },
       ],
       strength: 0,
@@ -263,7 +263,7 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
       hp: 55,
       maxHp: 55,
       actions: [
-        { name: "쇠약의 저주", attacks: [{ type: "magic", value: 6 }], cycle: true, nextTurnPhysicalVulnerabilityGain: 2 },
+        { name: "쇠약의 저주", attacks: [{ type: "magic", value: 12 }], cycle: true, nextTurnPhysicalVulnerabilityGain: 2 },
         { name: "저주 화살", attacks: [{ type: "physical", value: 12 }], cycle: true },
         { name: "저주 화살", attacks: [{ type: "physical", value: 12 }], cycle: true },
       ],

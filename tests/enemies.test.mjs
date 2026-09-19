@@ -104,13 +104,16 @@ test("orange slime rolls 36 to 40 health and alternates its upgraded pattern", (
   assert.equal(chooseNextIntent(actions, 1), 0);
 });
 
-test("golem waits twice, then alternates a wait and a 30-damage attack", () => {
+test("golem deals 8 damage during its waits and 30 damage on attack turns", () => {
   const golem = createSewerEncounterByIndex(2, () => 1)[0];
   assert.equal(golem.name, "골렘");
-  assert.equal(golem.hp, 80);
+  assert.equal(golem.hp, 90);
   assert.equal(golem.intentIndex, 0);
   assert.deepEqual(golem.actions.map((action) => action.name), ["...", "...!", "공격", "...", "공격"]);
+  assert.deepEqual(golem.actions.slice(0, 2).map((action) => action.attacks[0].value), [8, 8]);
   assert.equal(golem.actions[2].attacks[0].value, 30);
+  assert.equal(golem.actions[3].attacks[0].value, 8);
+  assert.equal(golem.actions[4].attacks[0].value, 30);
   assert.equal(chooseNextIntent(golem.actions, 0), 1);
   assert.equal(chooseNextIntent(golem.actions, 1), 2);
   assert.equal(chooseNextIntent(golem.actions, 2), 3);
@@ -161,7 +164,7 @@ test("three rats are 10-health enemies with fixed 6 damage", () => {
 test("warlock attacks immediately while applying delayed physical vulnerability", () => {
   const warlock = createSewerEncounterByIndex(6, () => 0)[0];
   assert.equal(warlock.hp, 49);
-  assert.deepEqual(warlock.actions[0].attacks[0], { type: "magic", value: 6 });
+  assert.deepEqual(warlock.actions[0].attacks[0], { type: "magic", value: 12 });
   assert.equal(warlock.actions[0].nextTurnPhysicalVulnerabilityGain, 2);
   assert.equal(warlock.actions[0].nextTurnMagicVulnerabilityGain, undefined);
   assert.equal(warlock.actions[1].attacks[0].value, 12);
@@ -287,6 +290,6 @@ test("thorn beetles start with four thorns and choose non-repeating patterns", (
 });
 
 test("enemy health rolls from floor 90 percent through full base health", () => {
-  assert.equal(createSewerEncounterByIndex(2, () => 0)[0].hp, 72);
-  assert.equal(createSewerEncounterByIndex(2, () => 0.999)[0].hp, 80);
+  assert.equal(createSewerEncounterByIndex(2, () => 0)[0].hp, 81);
+  assert.equal(createSewerEncounterByIndex(2, () => 0.999)[0].hp, 90);
 });

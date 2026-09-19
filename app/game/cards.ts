@@ -187,7 +187,7 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
 ];
 
 export const RARE_CARD_POOL: CardBlueprint[] = [
-  { kind: "strike", effect: "obsidianDagger", rarity: "rare", name: "흑요석 단검", cost: 0, value: 1, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "obsidianDagger", rarity: "rare", name: "흑요석 단검", cost: 3, value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "steelHeart", rarity: "rare", name: "강철심장", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "rapidFire", rarity: "rare", name: "연사", cost: 0, value: 0, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "superStrategist", rarity: "rare", name: "전술가", cost: 1, value: 5, draw: 0, damageType: "physical", exhaust: true },
