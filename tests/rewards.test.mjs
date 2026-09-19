@@ -99,3 +99,9 @@ test("special filler cards do not add debug deck score", () => {
   assert.equal(result.decks.length, 1);
   assert.equal(calculateDeckScore(result.decks[0]).cardScore, 0);
 });
+
+test("debug filler bags use three eighths empty slots", () => {
+  const result = generateDebugDecksByScore(0, 1, 200, () => 0);
+  assert.equal(result.discarded, 0);
+  assert.equal(result.decks[0].cards.length, 6);
+});

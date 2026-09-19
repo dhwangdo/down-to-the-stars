@@ -335,9 +335,9 @@ type DebugFillerKind = "empty" | "starter" | "basic" | "special";
 
 function createDebugFillerBag(size: number): DebugFillerKind[] {
   return [
-    ...Array.from({ length: size / 4 }, () => "empty" as const),
+    ...Array.from({ length: size * 3 / 8 }, () => "empty" as const),
     ...Array.from({ length: size / 8 }, () => "starter" as const),
-    ...Array.from({ length: size * 3 / 8 }, () => "basic" as const),
+    ...Array.from({ length: size / 4 }, () => "basic" as const),
     ...Array.from({ length: size / 4 }, () => "special" as const),
   ];
 }
