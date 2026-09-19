@@ -1858,6 +1858,7 @@ export default function Home() {
   const [telemetryMessage, setTelemetryMessage] = useState("");
   const [phase, setPhase] = useState<Phase>("drawing");
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [dragOverPileIndex, setDragOverPileIndex] = useState<number | null>(null);
   const [attackingEnemyId, setAttackingEnemyId] = useState<string | null>(null);
   const [damagePopup, setDamagePopup] = useState<DamagePopup | null>(null);
   const [enemyPopups, setEnemyPopups] = useState<Record<string, DamagePopup>>({});
@@ -6281,6 +6282,7 @@ export default function Home() {
     setHoveredDeckCard(null);
     setHoveredConsumable(null);
     setHoveredDeckEditionTooltip(null);
+    setDragOverPileIndex(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     const nextDrag = {
       card,
@@ -6303,6 +6305,18 @@ export default function Home() {
     const nextDrag = { ...current, x: event.clientX, y: event.clientY, moved };
     dragRef.current = nextDrag;
     setDragging(nextDrag);
+    if (!moved) {
+      setDragOverPileIndex(null);
+    } else {
+      const dropZone = document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLElement>("[data-drop-target]")
+        ?.dataset.dropTarget;
+      const targetPileIndex = dropZone?.startsWith("pile:") ? Number(dropZone.slice(5)) : null;
+      setDragOverPileIndex(
+        targetPileIndex !== null && Number.isInteger(targetPileIndex) ? targetPileIndex : null,
+      );
+    }
     if (moved) updatePileAutoScroll(event.clientX);
     else stopPileAutoScroll();
   };
@@ -6556,6 +6570,7 @@ export default function Home() {
     const current = dragRef.current;
     if (!current) return;
     stopPileAutoScroll();
+    setDragOverPileIndex(null);
     if (current.moved) {
       const dropZone = document
         .elementFromPoint(event.clientX, event.clientY)
@@ -6621,6 +6636,7 @@ export default function Home() {
     stopPileAutoScroll();
     dragRef.current = null;
     setDragging(null);
+    setDragOverPileIndex(null);
   };
 
   const endTurn = () => {
@@ -9807,6 +9823,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                 && targetCard !== undefined
                 && canForgeCardOnto(activeDrag.card, targetCard, lawResearchCount, game.forgeCount)
                 && (activeDrag.card.effect !== "obsidianDagger" || activeDrag.cards.length === 1);
+              const isHoveredSolitaireDrop = dragOverPileIndex === index && isValidSolitaireDrop;
               return (
                 <div
                   className={`solitaire-pile ${discardCount > 0 ? "is-discard-target" : ""} ${game.pendingDraws > 0 || game.pendingPileDrawCount > 0 || game.pendingSweep || game.pendingResearchDraw === "astronomy" ? pile.length > 0 ? "is-draw-choice" : "is-draw-empty" : ""}`}
@@ -9824,7 +9841,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                     else moveSelectedHandCardToPile(index);
                   }}
                 >
-                {pile.length === 0 && <div className={`empty-slot ${isValidSolitaireDrop ? isForgeDrop ? "is-forge-drop-target" : "is-solitaire-drop-target" : ""}`} aria-hidden="true" />}
+                {pile.length === 0 && <div className={`empty-slot ${isHoveredSolitaireDrop ? isForgeDrop ? "is-forge-drop-target" : "is-solitaire-drop-target" : ""}`} aria-hidden="true" />}
                 {discardCount > 0 && <span className="discard-target-label">버리기 {discardCount}</span>}
                 {pile.map((card, cardIndex) => {
                   const isTop = cardIndex === pile.length - 1;
@@ -9834,7 +9851,7 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                     && cardIndex >= dragging.source.cardIndex;
                   return (
                     <div
-                      className={`stacked-card ${faceUp ? `card-face face-up pile-draggable-card ${card.kind} ${card.damageType}` : "face-down"} ${isMoving ? "is-dragging" : ""} ${isTop && isValidSolitaireDrop ? isForgeDrop ? "is-forge-drop-target" : "is-solitaire-drop-target" : ""}`}
+                      className={`stacked-card ${faceUp ? `card-face face-up pile-draggable-card ${card.kind} ${card.damageType}` : "face-down"} ${isMoving ? "is-dragging" : ""} ${isTop && isHoveredSolitaireDrop ? isForgeDrop ? "is-forge-drop-target" : "is-solitaire-drop-target" : ""}`}
                       style={{
                         top: `${cardIndex * stackOffset}px`,
                         "--stack-index": cardIndex,
