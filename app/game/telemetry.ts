@@ -194,14 +194,16 @@ function activeBattle(recorder: TelemetryRecorder) {
 
 export function createTelemetryRecorder(): TelemetryRecorder {
   const store = loadStore();
-  const now = new Date().toISOString();
-  store.runs.forEach((run) => {
-    if (!run.endedAt) {
-      run.endedAt = now;
-      run.result = "abandoned";
-    }
-  });
-  return { store, activeRunId: null, activeBattleId: null };
+  const resumableRun = [...store.runs].reverse().find((run) => !run.endedAt);
+  const resumableBattle = resumableRun?.battles
+    .slice()
+    .reverse()
+    .find((battle) => !battle.endedAt);
+  return {
+    store,
+    activeRunId: resumableRun?.id ?? null,
+    activeBattleId: resumableBattle?.id ?? null,
+  };
 }
 
 export function hasActiveTelemetryRun(recorder: TelemetryRecorder) {
@@ -353,13 +355,6 @@ export function finishTelemetryRun(recorder: TelemetryRecorder, result: "won" | 
   run.result = result;
   recorder.activeBattleId = null;
   persist(recorder);
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.removeItem(TELEMETRY_STORAGE_KEY);
-    } catch {
-      // 로그 초기화 실패가 게임 플레이를 막지는 않게 한다.
-    }
-  }
 }
 
 export function resetTelemetryRecorder(recorder: TelemetryRecorder) {

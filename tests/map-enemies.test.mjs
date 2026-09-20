@@ -316,7 +316,7 @@ test("a planned player collision does not cancel other enemy movement", () => {
   assert.deepEqual(result.enemies.map((enemy) => enemy.position), [{ x: 2, y: 0 }, { x: 2, y: 1 }]);
 });
 
-test("an alerted enemy has a 95 percent chance to move closer", () => {
+test("an alerted enemy has a 92 percent chance to move closer", () => {
   const enemy = {
     id: "hunter",
     position: { x: 0, y: 0 },
@@ -328,14 +328,14 @@ test("an alerted enemy has a 95 percent chance to move closer", () => {
     { x: 0, y: 0 },
     { x: 2, y: 0 },
     alwaysWalkable,
-    randomValues(0.9, 0.94, 0),
+    randomValues(0.9, 0.91, 0),
   );
   const resting = advanceMapEnemies(
     [enemy],
     { x: 0, y: 0 },
     { x: 2, y: 0 },
     alwaysWalkable,
-    randomValues(0.9, 0.95),
+    randomValues(0.9, 0.92),
   );
   assert.equal(chebyshevDistance(moving.enemies[0].position, { x: 2, y: 0 }), 1);
   assert.deepEqual(resting.enemies[0].position, { x: 0, y: 0 });

@@ -368,7 +368,7 @@ export function advanceMapEnemies(
 
     const shouldMove = enemy.awareness === "awake"
       ? random() >= 0.5
-      : random() < 0.95;
+      : random() < 0.92;
     if (!shouldMove) continue;
     if (enemy.awareness === "alerted") alertedMovers.push(enemy);
     else awakeMovers.push(enemy);
