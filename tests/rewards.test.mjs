@@ -77,7 +77,7 @@ test("deck edition scores do not use a progressive surcharge", () => {
     editions: ["clever", "roomy", "lively"],
     cards: [],
   });
-  assert.equal(score.editionScore, 80);
+  assert.equal(score.editionScore, 75);
 });
 
 test("recycling editions are mutually exclusive", () => {

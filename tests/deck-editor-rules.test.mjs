@@ -12,7 +12,6 @@ const baseRequest = {
   safeArea: false,
   originalOriginDeckId: "A",
   effectiveOriginDeckId: "A",
-  sourceDeckCardCount: 2,
   targetDeckCardCount: 0,
   targetDeckCapacity: 10,
   inventoryItemCount: 0,
@@ -106,11 +105,11 @@ test("extraction accepts only an unreleased card recorded in a deck at session s
   }), { allowed: false, reason: "extract-original-only" });
 });
 
-test("minimum deck size and capacities remain enforced", () => {
+test("empty decks are allowed while capacities remain enforced", () => {
   assert.deepEqual(validateDeckEditorCardMove({
     ...baseRequest,
-    sourceDeckCardCount: 1,
-  }), { allowed: false, reason: "minimum-deck-size" });
+    target: { area: "floor" },
+  }), { allowed: true, action: "schedule-removal" });
   assert.deepEqual(validateDeckEditorCardMove({
     ...baseRequest,
     originalOriginDeckId: null,

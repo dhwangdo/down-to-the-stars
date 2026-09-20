@@ -241,9 +241,9 @@ export function dealtState(
   const initialPiles = buildPiles(
     preparedDeck,
     deckEditions.includes("fantastic") ? 4 : 5,
-    deckEditions.includes("transparent"),
+    false,
     deckEditions.includes("roomy") ? 1 : 0,
-    deckEditions.includes("golden"),
+    false,
     undefined,
     false,
     randomFaceUpChance,

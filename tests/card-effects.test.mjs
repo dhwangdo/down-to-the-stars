@@ -5,10 +5,11 @@ import { RARE_CARD_POOL, SPECIAL_CARD_POOL } from "../app/game/cards.ts";
 import { calculateDefenseGain, getDefenseBaseValue } from "../app/game/defenseRules.ts";
 import { cardCostAfterForgePlacement } from "../app/game/forgeRules.ts";
 
-test("forging old core preserves its zero energy cost", () => {
+test("forging old core preserves its one energy cost and no exhaust", () => {
   const oldCore = SPECIAL_CARD_POOL.find((card) => card.name === "낡은 노심");
   assert.ok(oldCore);
-  assert.equal(cardCostAfterForgePlacement(oldCore), 0);
+  assert.equal(cardCostAfterForgePlacement(oldCore), 1);
+  assert.equal(oldCore.exhaust, undefined);
 });
 
 test("obsidian dagger stays at three energy after every forge", () => {

@@ -16,7 +16,7 @@ export const BLESSING_INFO: Record<BlessingOfferId, { name: string; description:
   lightStep: { name: "가벼운 걸음", description: "적의 인식 확률이 절반이 됩니다." },
   sturdy: { name: "튼튼함", description: "최대 체력이 20 증가합니다." },
   greed: { name: "탐욕스러움", description: "골드 획득량이 2배가 됩니다." },
-  bag: { name: "가방 업그레이드", description: "인벤토리 +12칸, 덱 슬롯 +1" },
+  bag: { name: "가방 업그레이드", description: "인벤토리 +18칸, 덱 슬롯 +2" },
   deckSize: { name: "덱 크기 +5", description: "모든 덱 최대 장수 +5" },
   ninja: { name: "닌자", description: "잠든 적과 전투 시 아드레날린 1장을 얻습니다." },
   swordShield: { name: "검과 방패", description: "전투 시작 시 힘 +1, 강인함 +1" },

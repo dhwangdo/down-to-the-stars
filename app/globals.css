@@ -1036,7 +1036,8 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .blessing-reroll:disabled { opacity: .45; cursor: not-allowed; }
 .blessing-empty { padding: 40px; text-align: center; }
 .map-blessing-list { position: absolute; top: 85px; left: calc(90% + 8px); z-index: 8; display: grid; gap: 7px; width: 112px; }
-.map-blessing-list span { display: flex; min-height: 44px; align-items: center; justify-content: center; padding: 8px 10px; border: 1px solid #8b733e; border-radius: 4px; background: #f3dfaa; color: #473715; text-align: center; font: 800 13px Arial, sans-serif; }
+.map-blessing-list span { display: flex; min-height: 44px; align-items: center; justify-content: center; padding: 8px 10px; border: 1px solid #8b733e; border-radius: 4px; background: #f3dfaa; color: #473715; cursor: help; text-align: center; font: 800 13px Arial, sans-serif; }
+.map-blessing-list span:focus-visible { outline: 2px solid #fff2a8; outline-offset: 2px; }
 .map-blessing-list button { display: grid; min-height: 52px; place-items: center; gap: 3px; padding: 7px 10px; border: 1px solid #8b733e; border-radius: 4px; background: #f3dfaa; color: #473715; text-align: center; cursor: pointer; font: 800 13px Arial, sans-serif; }
 .map-blessing-list button strong, .map-blessing-list button small { display: block; text-align: center; }
 .map-blessing-list button small { font: 700 10px Arial, sans-serif; line-height: 1.15; }
@@ -3833,6 +3834,15 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   background: rgba(0, 0, 0, .74);
 }
 
+.save-loading-dialog {
+  padding: 18px 24px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 8px;
+  color: #f5f7f4;
+  background: rgba(10, 16, 13, .88);
+  box-shadow: 0 12px 42px rgba(0,0,0,.42);
+}
+
 .battle-deck-check-overlay {
   position: fixed;
   z-index: 150;
@@ -5011,17 +5021,18 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .deck-list-entry .editor-card-name {
   position: absolute;
   top: 50%;
-  right: 2px;
-  left: 2px;
+  right: 0;
+  left: 0;
   display: block;
   width: auto;
   max-width: none;
-  padding: 0;
+  padding-inline: 6px;
+  box-sizing: border-box;
   overflow: hidden;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
-  letter-spacing: -.65px;
+  letter-spacing: normal;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5292,6 +5303,37 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   color: #fff;
   background: rgba(255,255,255,.1);
 }
+.treasure-chest-panel { width: min(980px, 100%); }
+.treasure-chest-reward-body {
+  min-height: 250px;
+  padding: 28px;
+  background: rgba(7,12,9,.18);
+}
+.treasure-chest-reward-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 194px;
+}
+.treasure-chest-reward-deck { color: #f5f7f4; border-color: rgba(173,225,188,.62); background: rgba(72,123,88,.42); }
+.treasure-chest-reward-consumable { flex: 0 0 150px; width: 150px; height: 112px; color: #20241f; }
+.treasure-chest-reward-consumable > small { display: block; color: #3e493f; }
+.treasure-chest-bonus-reward,
+.treasure-chest-empty-reward {
+  display: grid;
+  min-width: 180px;
+  min-height: 76px;
+  place-items: center;
+  padding: 12px 18px;
+  border: 1px solid rgba(230,205,122,.75);
+  border-radius: 4px;
+  color: #fff2b8;
+  background: rgba(119,91,36,.35);
+  font-weight: 800;
+}
+.treasure-chest-empty-reward { border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.7); background: rgba(255,255,255,.06); }
 .shrine-transfer { background: rgba(7, 12, 9, .13); }
 .shrine-deck-column {
   border-color: rgba(255,255,255,.22);

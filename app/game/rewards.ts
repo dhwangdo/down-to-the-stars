@@ -21,8 +21,6 @@ export type DeckEdition =
   | "roomy"
   | "lively"
   | "fantastic"
-  | "transparent"
-  | "golden"
   | "rampaging"
   | "greedy"
   | "frugal"
@@ -165,8 +163,6 @@ export const DECK_EDITION_INFO: Record<DeckEdition, { name: string; description:
   roomy: { name: "추가 파일", description: "전투 시작 시 빈 파일을 1개 추가합니다." },
   lively: { name: "아드레날린", description: "전투 시작 시 아드레날린 카드를 1장 획득합니다." },
   fantastic: { name: "압축", description: "파일을 4장씩 쌓습니다." },
-  transparent: { name: "프리뷰", description: "파일 생성 시 첫 번째 파일의 카드를 모두 앞면으로 배치합니다." },
-  golden: { name: "희귀 감지", description: "모든 희귀 카드를 앞면으로 배치합니다." },
   rampaging: { name: "지속 에너지", description: "최대 에너지가 1 증가합니다." },
   greedy: { name: "탐욕", description: "전투 보상으로 얻는 골드가 2배가 됩니다." },
   frugal: { name: "재활용", description: "턴 종료 시 남은 에너지 1당 ★ 1개를 획득합니다." },
@@ -190,14 +186,12 @@ export const DECK_EDITION_INFO: Record<DeckEdition, { name: string; description:
 
 export const DECK_EDITION_SCORES: Record<DeckEdition, number> = {
   clever: 20,
-  roomy: 10,
+  roomy: 5,
   lively: 50,
   fantastic: 60,
-  transparent: 5,
-  golden: 5,
   rampaging: 50,
   greedy: 20,
-  frugal: 10,
+  frugal: 5,
   drawPlus: 10,
   starPlus: 10,
   energyPlus: 20,
@@ -221,8 +215,6 @@ const EDITION_COLORS: Record<DeckEdition, string> = {
   roomy: "#f97316",
   lively: "#eab308",
   fantastic: "#84cc16",
-  transparent: "#22c55e",
-  golden: "#14b8a6",
   rampaging: "#06b6d4",
   greedy: "#0ea5e9",
   frugal: "#3b82f6",
@@ -532,7 +524,7 @@ export function createRegionDeck(
   capacityBonus = 0,
   random: () => number = Math.random,
 ): DeckCase {
-  const startScore = Math.max(0, regionNumber * 30 + Math.floor(random() * 11) - 5);
+  const startScore = Math.max(0, regionNumber * 30 + Math.floor(random() * 11));
   let nextCardId = startId;
   for (;;) {
     const result = generateDebugDeckAttempt(startScore, nextCardId, random, capacityBonus);

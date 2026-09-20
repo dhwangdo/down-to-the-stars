@@ -26,7 +26,6 @@ export function createCardOriginDeckIds(
 
 export type DeckEditorMoveBlockReason =
   | "same-location"
-  | "minimum-deck-size"
   | "inventory-full"
   | "deck-full"
   | "origin-locked"
@@ -44,7 +43,6 @@ export type DeckEditorMoveRequest = {
   safeArea: boolean;
   originalOriginDeckId: string | null;
   effectiveOriginDeckId: string | null;
-  sourceDeckCardCount?: number;
   targetDeckCardCount?: number;
   targetDeckCapacity?: number;
   inventoryItemCount: number;
@@ -58,11 +56,6 @@ export function validateDeckEditorCardMove(request: DeckEditorMoveRequest): Deck
     && (request.source.area !== "deck" || request.source.deckId === request.target.deckId);
   if (sameLocation) return { allowed: false, reason: "same-location" };
 
-  const leavesSourceDeck = request.source.area === "deck"
-    && (request.target.area !== "deck" || request.source.deckId !== request.target.deckId);
-  if (leavesSourceDeck && (request.sourceDeckCardCount ?? 0) <= 1) {
-    return { allowed: false, reason: "minimum-deck-size" };
-  }
   const inventoryItemCountAfterMove = Math.max(
     0,
     request.inventoryItemCount - (request.inventorySlotsFreed ?? 0),

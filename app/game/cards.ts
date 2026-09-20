@@ -122,6 +122,7 @@ export type Card = {
 export type CardBlueprint = Omit<Card, "id" | "revealed">;
 
 export const ATTACK_CARD_EFFECTS = new Set<CardEffect>([
+  "radiance",
   "sweep",
   "doubleHit",
   "ironRampage",
@@ -174,7 +175,7 @@ export const SPECIAL_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "iceShield", rarity: "special", name: "얼음 방패", cost: 1, value: 11, draw: 0, damageType: "magic" },
   { kind: "strike", effect: "fourHit", rarity: "special", name: "4연격", cost: 1, value: 2, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "battlePlan", rarity: "special", name: "전략가", cost: 1, value: 2, draw: 1, damageType: "physical" },
-  { kind: "skill", effect: "plateArmor", rarity: "special", name: "낡은 노심", cost: 0, value: 1, draw: 0, damageType: "physical", forgeCost: 3, exhaust: true },
+  { kind: "skill", effect: "plateArmor", rarity: "special", name: "낡은 노심", cost: 1, value: 1, draw: 0, damageType: "physical", forgeCost: 3 },
   { kind: "skill", effect: "plateArmorDefense", rarity: "special", name: "판금 갑옷", cost: 1, value: 8, draw: 0, damageType: "physical", forgeCost: 3 },
   { kind: "skill", effect: "elimination", rarity: "special", name: "소거법", cost: 1, value: 0, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "weaponSharpen", rarity: "special", name: "무기 연마", cost: 1, value: 2, draw: 0, damageType: "physical", exhaust: true },
@@ -200,7 +201,7 @@ export const RARE_CARD_POOL: CardBlueprint[] = [
   { kind: "skill", effect: "superStrategist", rarity: "rare", name: "전술가", cost: 1, value: 5, draw: 0, damageType: "physical", exhaust: true },
   { kind: "skill", effect: "grimoire", rarity: "rare", name: "마도서", value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "supernova", rarity: "rare", name: "초신성", cost: 0, value: 3, draw: 0, damageType: "physical", exhaust: true },
-  { kind: "strike", effect: "meteor", rarity: "rare", name: "유성우", cost: 2, value: 7, draw: 0, damageType: "physical" },
+  { kind: "strike", effect: "meteor", rarity: "rare", name: "유성우", cost: 2, value: 9, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "massDeal", rarity: "rare", name: "대분배", cost: 1, value: 0, draw: 0, damageType: "physical", forgeCost: 3, exhaust: true, rule: true },
   { kind: "skill", effect: "sturdyStance", rarity: "rare", name: "견고한 태세", cost: 2, value: 0, draw: 0, damageType: "physical", exhaust: true, rule: true },
   { kind: "skill", effect: "lawResearch", rarity: "rare", name: "법학 연구", cost: 2, value: 1, draw: 0, damageType: "physical", exhaust: true, rule: true },

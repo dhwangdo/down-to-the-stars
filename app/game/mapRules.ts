@@ -37,10 +37,23 @@ export type RoomType =
 
 export const REGION_COUNT = 7;
 export const ROCK_BARRIER_HEIGHT = 5;
-export const SPECIAL_NODE_CHANCE = 0.005;
-const SPECIAL_NODE_WEIGHT_TOTAL = 0.5 + 1 + 0.5 + 1 + 1 + 1 + 0.5 + 0.01;
+export const SPECIAL_NODE_CHANCE = 0.006;
+const SPECIAL_NODE_WEIGHTS: ReadonlyArray<{ type: RoomType; weight: number }> = [
+  { type: "shop", weight: 0.5 },
+  { type: "shrine", weight: 2 },
+  { type: "vitalityShrine", weight: 0.5 },
+  { type: "mindEyeShrine", weight: 1 },
+  { type: "transformShrine", weight: 1 },
+  { type: "combinationShrine", weight: 1 },
+  { type: "treasureChest", weight: 0.5 },
+  { type: "blessing", weight: 0.01 },
+];
+const SPECIAL_NODE_WEIGHT_TOTAL = SPECIAL_NODE_WEIGHTS.reduce(
+  (total, entry) => total + entry.weight,
+  0,
+);
 export const SHOP_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / SPECIAL_NODE_WEIGHT_TOTAL;
-export const SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
+export const SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 2 / SPECIAL_NODE_WEIGHT_TOTAL;
 export const VITALITY_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 0.5 / SPECIAL_NODE_WEIGHT_TOTAL;
 export const MIND_EYE_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
 export const TRANSFORM_SHRINE_NODE_CHANCE = SPECIAL_NODE_CHANCE * 1 / SPECIAL_NODE_WEIGHT_TOTAL;
@@ -220,15 +233,133 @@ function isPortalColumn(x: number, regionIndex: number, seed: number) {
   return x === fallback;
 }
 
+function getFixedRoomType(position: MapPosition, seed: number): RoomType | null {
+  if (position.x === MAP_START.x && position.y === MAP_START.y) return "empty";
+  const safeRegion = getSafeAreaRegionIndex(position, seed);
+  if (safeRegion !== null) {
+    const centerX = safeAreaCenterX(safeRegion, seed);
+    const centerY = safeAreaCenterY(safeRegion, seed);
+    if (position.x === centerX + SAFE_AREA_HEAL_OFFSET_X && position.y === centerY - 1) return "blessing";
+    if (position.x === centerX + SAFE_AREA_HEAL_OFFSET_X && position.y === centerY) return "heal";
+    if (position.x === centerX + SAFE_AREA_HEAL_OFFSET_X && position.y === centerY + 1) return "shop";
+    if (position.x === centerX + SAFE_AREA_PORTAL_OFFSET_X && position.y === centerY) return "safePortal";
+    if (safeRegion < BOSS_REGION_COUNT
+      && position.x === centerX + SAFE_AREA_CONNECTOR_OFFSET_X
+      && position.y === centerY) return "boss";
+    if (safeRegion < 3 && position.x === centerX + SAFE_AREA_LEFT_CROSS_CENTER_OFFSET_X) {
+      if (position.y === centerY) return "recoveryShrine";
+      if (Math.abs(position.y - centerY) === 1) return "shrine";
+    }
+    return "empty";
+  }
+  const safeLayoutRegion = getSafeAreaLayoutRegionIndex(position, seed);
+  if (safeLayoutRegion !== null) {
+    if (!isSafeAreaBoundaryGeometryPosition(position, safeLayoutRegion, seed)) return "empty";
+    return "rock";
+  }
+  if (position.x >= DUNGEON_MIN_X && position.x <= DUNGEON_MAX_X) {
+    if (position.y >= -ROCK_BARRIER_HEIGHT && position.y < 0) return "rock";
+    const regionIndex = getDungeonRegionIndex(position);
+    if (regionIndex !== null) {
+      const localY = position.y - regionStartY(regionIndex);
+      if (localY === 0 && position.x === 0) return "empty";
+      if (localY === regionHeight(regionIndex) - 1 && isPortalColumn(position.x, regionIndex, seed)) return "portal";
+      return null;
+    }
+    for (let regionIndex = 0; regionIndex < REGION_COUNT - 1; regionIndex += 1) {
+      const barrierStart = regionStartY(regionIndex) + regionHeight(regionIndex);
+      if (position.y >= barrierStart && position.y < barrierStart + ROCK_BARRIER_HEIGHT) return "rock";
+    }
+  }
+  return "void";
+}
+
+function chooseSoftDistributedPositions(
+  candidates: readonly MapPosition[],
+  count: number,
+  seed: number,
+  salt: number,
+  repellers: readonly MapPosition[] = [],
+) {
+  const pool = [...candidates];
+  const selected: MapPosition[] = [];
+  while (selected.length < count && pool.length > 0) {
+    const occupied = [...repellers, ...selected];
+    const weighted = pool.map((position) => {
+      const influence = occupied.reduce((total, other) => {
+        const distance = chebyshevDistance(position, other);
+        if (distance <= 0 || distance > 8) return total;
+        return total + 2 ** (-(distance - 1));
+      }, 0);
+      return {
+        position,
+        weight: 1 / (1 + 1.5 * influence),
+      };
+    });
+    const totalWeight = weighted.reduce((total, entry) => total + entry.weight, 0);
+    let cursor = seededRoll({ x: selected.length, y: count }, seed, salt + selected.length) * totalWeight;
+    let chosenIndex = weighted.length - 1;
+    for (let index = 0; index < weighted.length; index += 1) {
+      cursor -= weighted[index].weight;
+      if (cursor <= 0) {
+        chosenIndex = index;
+        break;
+      }
+    }
+    selected.push(pool[chosenIndex]);
+    pool.splice(chosenIndex, 1);
+  }
+  return selected;
+}
+
+const specialNodeLayoutCache = new Map<number, Map<string, RoomType>>();
+
+function getSpecialNodeLayout(seed: number) {
+  const cached = specialNodeLayoutCache.get(seed);
+  if (cached) return cached;
+
+  const eligiblePositions: MapPosition[] = [];
+  let baselineSpecialCount = 0;
+  for (let y = 0; y < MAP_ROWS; y += 1) {
+    for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
+      const position = { x, y };
+      if (getFixedRoomType(position, seed) !== null) continue;
+      eligiblePositions.push(position);
+      const regionIndex = getDungeonRegionIndex(position)!;
+      const localY = position.y - regionStartY(regionIndex);
+      const availableChance = localY === regionHeight(regionIndex) - 1
+        ? 1 - PORTAL_NODE_CHANCE
+        : 1;
+      if (seededRoll(position, seed) < SPECIAL_NODE_CHANCE / availableChance) baselineSpecialCount += 1;
+    }
+  }
+
+  const selected = chooseSoftDistributedPositions(eligiblePositions, baselineSpecialCount, seed, 7300);
+  const layout = new Map<string, RoomType>();
+  selected.forEach((position) => {
+    const roll = seededRoll(position, seed, 7301);
+    let cumulative = 0;
+    let selectedType = SPECIAL_NODE_WEIGHTS.at(-1)!.type;
+    for (const entry of SPECIAL_NODE_WEIGHTS) {
+      cumulative += entry.weight / SPECIAL_NODE_WEIGHT_TOTAL;
+      if (roll < cumulative) {
+        selectedType = entry.type;
+        break;
+      }
+    }
+    layout.set(mapRoomKey(position), selectedType);
+  });
+  specialNodeLayoutCache.set(seed, layout);
+  return layout;
+}
+
 function isNormalDungeonFloor(position: MapPosition, seed: number) {
   const regionIndex = getDungeonRegionIndex(position);
   if (regionIndex === null || chebyshevDistance(position, MAP_START) <= 1) return false;
   const localY = position.y - regionStartY(regionIndex);
   if (localY === 0 && position.x === 0) return false;
   if (localY === regionHeight(regionIndex) - 1 && isPortalColumn(position.x, regionIndex, seed)) return false;
-  const portalEligible = localY === regionHeight(regionIndex) - 1;
-  const availableChance = portalEligible ? 1 - PORTAL_NODE_CHANCE : 1;
-  return seededRoll(position, seed) >= SPECIAL_NODE_CHANCE / availableChance;
+  return !getSpecialNodeLayout(seed).has(mapRoomKey(position));
 }
 
 function isRockClusterCell(position: MapPosition, seed: number) {
@@ -263,56 +394,12 @@ function isRockClusterCell(position: MapPosition, seed: number) {
 }
 
 export function getRoomType(position: MapPosition, seed: number): RoomType {
-  if (position.x === MAP_START.x && position.y === MAP_START.y) return "empty";
-  const safeRegion = getSafeAreaRegionIndex(position, seed);
-  if (safeRegion !== null) {
-    const centerX = safeAreaCenterX(safeRegion, seed);
-    const centerY = safeAreaCenterY(safeRegion, seed);
-    if (position.x === centerX + SAFE_AREA_HEAL_OFFSET_X && position.y === centerY - 1) return "blessing";
-    if (position.x === centerX + SAFE_AREA_HEAL_OFFSET_X && position.y === centerY) return "heal";
-    if (position.x === centerX + SAFE_AREA_HEAL_OFFSET_X && position.y === centerY + 1) return "shop";
-    if (position.x === centerX + SAFE_AREA_PORTAL_OFFSET_X && position.y === centerY) return "safePortal";
-    if (safeRegion < BOSS_REGION_COUNT
-      && position.x === centerX + SAFE_AREA_CONNECTOR_OFFSET_X
-      && position.y === centerY) return "boss";
-    if (safeRegion < 3 && position.x === centerX + SAFE_AREA_LEFT_CROSS_CENTER_OFFSET_X) {
-      if (position.y === centerY) return "recoveryShrine";
-      if (Math.abs(position.y - centerY) === 1) return "shrine";
-    }
-    return "empty";
-  }
-  const safeLayoutRegion = getSafeAreaLayoutRegionIndex(position, seed);
-  if (safeLayoutRegion !== null) {
-    if (!isSafeAreaBoundaryGeometryPosition(position, safeLayoutRegion, seed)) return "empty";
-    return "rock";
-  }
-  if (position.x >= DUNGEON_MIN_X && position.x <= DUNGEON_MAX_X) {
-    if (position.y >= -ROCK_BARRIER_HEIGHT && position.y < 0) return "rock";
-    const regionIndex = getDungeonRegionIndex(position);
-    if (regionIndex !== null) {
-      const localY = position.y - regionStartY(regionIndex);
-      if (localY === 0 && position.x === 0) return "empty";
-      if (localY === regionHeight(regionIndex) - 1 && isPortalColumn(position.x, regionIndex, seed)) return "portal";
-      const portalEligible = localY === regionHeight(regionIndex) - 1;
-      const availableChance = portalEligible ? 1 - PORTAL_NODE_CHANCE : 1;
-      const roll = seededRoll(position, seed);
-      if (roll < SHOP_NODE_CHANCE / availableChance) return "shop";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE) / availableChance) return "shrine";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE) / availableChance) return "vitalityShrine";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE) / availableChance) return "mindEyeShrine";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE + TRANSFORM_SHRINE_NODE_CHANCE) / availableChance) return "transformShrine";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE + TRANSFORM_SHRINE_NODE_CHANCE + COMBINATION_SHRINE_NODE_CHANCE) / availableChance) return "combinationShrine";
-      if (roll < (SHOP_NODE_CHANCE + SHRINE_NODE_CHANCE + VITALITY_SHRINE_NODE_CHANCE + MIND_EYE_SHRINE_NODE_CHANCE + TRANSFORM_SHRINE_NODE_CHANCE + COMBINATION_SHRINE_NODE_CHANCE + TREASURE_CHEST_NODE_CHANCE) / availableChance) return "treasureChest";
-      if (roll < SPECIAL_NODE_CHANCE / availableChance) return "blessing";
-      if (!isAdjacentToSafeAreaBoundary(position, seed) && isRockClusterCell(position, seed)) return "rock";
-      return "empty";
-    }
-    for (let regionIndex = 0; regionIndex < REGION_COUNT - 1; regionIndex += 1) {
-      const barrierStart = regionStartY(regionIndex) + regionHeight(regionIndex);
-      if (position.y >= barrierStart && position.y < barrierStart + ROCK_BARRIER_HEIGHT) return "rock";
-    }
-  }
-  return "void";
+  const fixedType = getFixedRoomType(position, seed);
+  if (fixedType !== null) return fixedType;
+  const specialType = getSpecialNodeLayout(seed).get(mapRoomKey(position));
+  if (specialType) return specialType;
+  if (!isAdjacentToSafeAreaBoundary(position, seed) && isRockClusterCell(position, seed)) return "rock";
+  return "empty";
 }
 
 export function isWalkableRoom(type: RoomType) {
@@ -416,28 +503,41 @@ export function createPreGeneratedMapEnemyWorld(seed: number): MapEnemyWorld {
 export function createPreGeneratedMapFloorDrops(seed: number) {
   const cards: Record<string, Card[]> = {};
   const consumables: Record<string, Consumable[]> = {};
-  let cardIndex = 0;
+  const specialPositions = Array.from(getSpecialNodeLayout(seed).keys()).map(parseMapRoomKey);
+  const emptyPositions: MapPosition[] = [];
+  const baselineDropCount = { value: 0 };
   for (let y = 0; y < MAP_ROWS; y += 1) {
     for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
       const position = { x, y };
       if (getRoomType(position, seed) !== "empty") continue;
-      if (seededRoll(position, seed, 7201) >= FLOOR_CARD_DROP_CHANCE) continue;
-      const roomKey = mapRoomKey(position);
-      if (seededRoll(position, seed, 7202) < FLOOR_CARD_ITEM_CHANCE) {
-        const rarityRoll = seededRoll(position, seed, 7203);
-        const pool = rarityRoll < FLOOR_CARD_RARITY_CHANCES.rare
-          ? RARE_CARD_POOL
-          : rarityRoll < FLOOR_CARD_RARITY_CHANCES.rare + FLOOR_CARD_RARITY_CHANCES.basic
-            ? BASIC_CARD_POOL
-            : SPECIAL_CARD_POOL.filter((card) => card.rarity === "special");
-        const blueprint = pool[Math.floor(seededRoll(position, seed, 7204) * pool.length)];
-        cards[roomKey] = [{ ...blueprint, id: 100_000 + cardIndex, revealed: false }];
-        cardIndex += 1;
-      } else {
-        const ticketRoll = seededRoll(position, seed, 7203);
-        const type = consumableTypeFromRoll(ticketRoll);
-        consumables[roomKey] = [createConsumable(type, `map-ticket-${position.x}-${position.y}`)];
-      }
+      emptyPositions.push(position);
+      if (seededRoll(position, seed, 7201) < FLOOR_CARD_DROP_CHANCE) baselineDropCount.value += 1;
+    }
+  }
+  const dropPositions = chooseSoftDistributedPositions(
+    emptyPositions,
+    baselineDropCount.value,
+    seed,
+    7205,
+    specialPositions,
+  ).sort((left, right) => left.y - right.y || left.x - right.x);
+  let cardIndex = 0;
+  for (const position of dropPositions) {
+    const roomKey = mapRoomKey(position);
+    if (seededRoll(position, seed, 7202) < FLOOR_CARD_ITEM_CHANCE) {
+      const rarityRoll = seededRoll(position, seed, 7203);
+      const pool = rarityRoll < FLOOR_CARD_RARITY_CHANCES.rare
+        ? RARE_CARD_POOL
+        : rarityRoll < FLOOR_CARD_RARITY_CHANCES.rare + FLOOR_CARD_RARITY_CHANCES.basic
+          ? BASIC_CARD_POOL
+          : SPECIAL_CARD_POOL.filter((card) => card.rarity === "special");
+      const blueprint = pool[Math.floor(seededRoll(position, seed, 7204) * pool.length)];
+      cards[roomKey] = [{ ...blueprint, id: 100_000 + cardIndex, revealed: false }];
+      cardIndex += 1;
+    } else {
+      const ticketRoll = seededRoll(position, seed, 7203);
+      const type = consumableTypeFromRoll(ticketRoll);
+      consumables[roomKey] = [createConsumable(type, `map-ticket-${position.x}-${position.y}`)];
     }
   }
   return { cards, consumables };
@@ -464,6 +564,89 @@ export function buildKnownRoomRoutes(
     }
   }
   return previous;
+}
+
+export function findKnownRoomRoute(
+  start: MapPosition,
+  target: MapPosition,
+  knownRooms: Set<string>,
+  roomTypeAt: (position: MapPosition) => RoomType,
+) {
+  const startKey = mapRoomKey(start);
+  const targetKey = mapRoomKey(target);
+  if (startKey === targetKey) return [start];
+  if (!knownRooms.has(targetKey) || !isWalkableRoom(roomTypeAt(target))) return null;
+
+  type RouteNode = {
+    position: MapPosition;
+    key: string;
+    steps: number;
+    turns: number;
+    directionIndex: number | null;
+    priority: number;
+    order: number;
+  };
+  const previous = new Map<string, string | null>([[startKey, null]]);
+  const bestSteps = new Map<string, number>([[startKey, 0]]);
+  const bestTurns = new Map<string, number>([[startKey, 0]]);
+  const queue: RouteNode[] = [{
+    position: start,
+    key: startKey,
+    steps: 0,
+    turns: 0,
+    directionIndex: null,
+    priority: chebyshevDistance(start, target),
+    order: 0,
+  }];
+  let order = 1;
+
+  while (queue.length > 0) {
+    queue.sort((left, right) =>
+      left.priority - right.priority
+      || left.turns - right.turns
+      || left.steps - right.steps
+      || left.order - right.order);
+    const current = queue.shift()!;
+    if (current.key === targetKey) {
+      const reversed: MapPosition[] = [];
+      let cursor: string | null = targetKey;
+      while (cursor) {
+        reversed.push(parseMapRoomKey(cursor));
+        cursor = previous.get(cursor) ?? null;
+      }
+      return reversed.reverse();
+    }
+
+    for (let directionIndex = 0; directionIndex < EIGHT_DIRECTIONS.length; directionIndex += 1) {
+      const direction = EIGHT_DIRECTIONS[directionIndex];
+      const next = { x: current.position.x + direction.x, y: current.position.y + direction.y };
+      const nextKey = mapRoomKey(next);
+      if (!knownRooms.has(nextKey) || !isWalkableRoom(roomTypeAt(next))) continue;
+      const steps = current.steps + 1;
+      const turns = current.turns
+        + (current.directionIndex === null || current.directionIndex === directionIndex ? 0 : 1);
+      const knownSteps = bestSteps.get(nextKey);
+      const knownTurns = bestTurns.get(nextKey);
+      if (
+        knownSteps !== undefined
+        && (steps > knownSteps || (steps === knownSteps && turns >= (knownTurns ?? Infinity)))
+      ) continue;
+      bestSteps.set(nextKey, steps);
+      bestTurns.set(nextKey, turns);
+      previous.set(nextKey, current.key);
+      queue.push({
+        position: next,
+        key: nextKey,
+        steps,
+        turns,
+        directionIndex,
+        priority: steps + chebyshevDistance(next, target),
+        order,
+      });
+      order += 1;
+    }
+  }
+  return null;
 }
 
 export function routeToRoom(target: MapPosition, routes: Map<string, string | null>) {

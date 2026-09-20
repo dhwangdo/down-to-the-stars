@@ -154,8 +154,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "작은 마법사",
-      hp: 30,
-      maxHp: 30,
+      hp: 37,
+      maxHp: 37,
       actions: [{ name: "마법 화살", attacks: [{ type: "magic", value: 8 }] }],
       strength: 0,
       physicalBlock: 0,
@@ -169,8 +169,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "주황 슬라임",
-      hp: 40,
-      maxHp: 40,
+      hp: 50,
+      maxHp: 50,
       actions: [
         { name: "점액 충돌", attacks: [{ type: "physical", value: 9 }], cycle: true },
         { name: "점액 방어", attacks: [{ type: "physical", value: 6 }], blockGain: 10, cycle: true },
@@ -188,8 +188,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "골렘",
-      hp: 90,
-      maxHp: 90,
+      hp: 112,
+      maxHp: 112,
       actions: [
         { name: "...", attacks: [{ type: "physical", value: 8 }], cycle: true },
         { name: "...!", attacks: [{ type: "physical", value: 8 }], cycle: true },
@@ -209,8 +209,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "하수구 쥐",
-      hp: 40,
-      maxHp: 40,
+      hp: 50,
+      maxHp: 50,
       actions: [
         { name: "물어뜯기", attacks: [{ type: "physical", value: 5, hits: 2 }], discardCount: 1, cycle: true },
         { name: "웅크리기", attacks: [{ type: "physical", value: 10 }], discardCount: 1, cycle: true },
@@ -228,8 +228,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "도깨비",
-      hp: 66,
-      maxHp: 66,
+      hp: 82,
+      maxHp: 82,
       actions: [
         { name: "강타", attacks: [{ type: "physical", value: 14 }], cycle: true },
         { name: "연타", attacks: [{ type: "physical", value: 8, hits: 2 }], cycle: true },
@@ -246,8 +246,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   ],
   Array.from({ length: 3 }, () => ({
     name: "쥐",
-    hp: 10,
-    maxHp: 10,
+    hp: 13,
+    maxHp: 13,
     actions: [{ name: "물어뜯기", attacks: [{ type: "physical" as const, value: 6 }] }],
     strength: 0,
     physicalBlock: 0,
@@ -260,8 +260,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "저주술사",
-      hp: 55,
-      maxHp: 55,
+      hp: 68,
+      maxHp: 68,
       actions: [
         { name: "쇠약의 저주", attacks: [{ type: "magic", value: 12 }], cycle: true, nextTurnPhysicalVulnerabilityGain: 2 },
         { name: "저주 화살", attacks: [{ type: "physical", value: 12 }], cycle: true },
@@ -279,8 +279,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "초록 슬라임",
-      hp: 40,
-      maxHp: 40,
+      hp: 50,
+      maxHp: 50,
       actions: [
         { name: "점액 충돌", attacks: [{ type: "physical", value: 10 }], randomEachTurn: true },
         { name: "점액 주입", attacks: [{ type: "physical", value: 10 }], nextAttackMagic: true, randomEachTurn: true },
@@ -297,8 +297,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "마나 야수",
-      hp: 55,
-      maxHp: 55,
+      hp: 68,
+      maxHp: 68,
       actions: [{ name: "마력 포식", attacks: [{ type: "physical", value: 7 }, { type: "magic", value: 7 }] }],
       strength: 0,
       physicalBlock: 0,
@@ -310,8 +310,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
     },
     {
       name: "도깨비불",
-      hp: 20,
-      maxHp: 20,
+      hp: 25,
+      maxHp: 25,
       actions: [{ name: "마력 침식", attacks: [], nextTurnMagicVulnerabilityGain: 1 }],
       strength: 0,
       physicalBlock: 0,
@@ -324,8 +324,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   ],
   Array.from({ length: 2 }, () => ({
     name: "작은 마법사",
-    hp: 30,
-    maxHp: 30,
+    hp: 37,
+    maxHp: 37,
     actions: [{ name: "마법 화살", attacks: [{ type: "magic" as const, value: 8 }] }],
     strength: 0,
     physicalBlock: 0,
@@ -338,8 +338,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "미라 사제",
-      hp: 70,
-      maxHp: 70,
+      hp: 87,
+      maxHp: 87,
       actions: [
         { name: "가호의 의식", attacks: [], boonGain: 2, cycle: true, nextTurnMagicVulnerabilityGain: 1 },
         { name: "마력의 저주", attacks: [{ type: "magic", value: 16 }], cycle: true },
@@ -358,8 +358,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "미라 전사",
-      hp: 100,
-      maxHp: 100,
+      hp: 125,
+      maxHp: 125,
       actions: [
         { name: "삼연격", attacks: [{ type: "physical", value: 4, hits: 3 }], cycle: true },
         { name: "강타", attacks: [{ type: "physical", value: 16 }], cycle: true },
@@ -378,8 +378,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "지룡",
-      hp: 95,
-      maxHp: 95,
+      hp: 118,
+      maxHp: 118,
       actions: [
         { name: "흙", attacks: [], soilCount: 1, cycle: true, nextTurnPhysicalVulnerabilityGain: 1 },
         { name: "지각 강타", attacks: [{ type: "physical", value: 15 }], cycle: true },
@@ -396,8 +396,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   ],
   Array.from({ length: 2 }, () => ({
     name: "가시 딱정벌레",
-    hp: 45,
-    maxHp: 45,
+    hp: 56,
+    maxHp: 56,
     actions: [
       { name: "가시 돋치기", attacks: [], nextTurnPhysicalVulnerabilityGain: 1, randomNoRepeat: true },
       { name: "가시 강타", attacks: [{ type: "physical", value: 10 }], randomNoRepeat: true },
@@ -415,8 +415,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "검은 슬라임",
-      hp: 70,
-      maxHp: 70,
+      hp: 87,
+      maxHp: 87,
       actions: [
         { name: "검은 점액 충돌", attacks: [{ type: "physical", value: 10 }], cycle: true },
         { name: "검은 점액 방어", attacks: [], blockGain: 10, strengthGain: 2, cycle: true },
@@ -436,8 +436,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "광대",
-      hp: 110,
-      maxHp: 110,
+      hp: 137,
+      maxHp: 137,
       actions: [
         { name: "광대의 강타", attacks: [{ type: "physical", value: 20 }], discardCount: 5, cycle: true },
         { name: "광대의 마법", attacks: [{ type: "magic", value: 20 }], discardCount: 5, cycle: true },
@@ -456,8 +456,8 @@ const SEWER_ENCOUNTERS: EnemyBlueprint[][] = [
   [
     {
       name: "거대 지룡",
-      hp: 150,
-      maxHp: 150,
+      hp: 187,
+      maxHp: 187,
       actions: [
         { name: "돌 깔기", attacks: [], rockCount: 1, firstActionRockCount: 2, strengthGain: 4, cycle: true },
         { name: "지룡 강타", attacks: [{ type: "physical", value: 12 }], cycle: true },
@@ -589,7 +589,9 @@ export function createSewerEncounterByIndex(
   const safeIndex = Math.max(0, Math.min(SEWER_ENCOUNTERS.length - 1, Math.floor(encounterIndex)));
   const encounter = SEWER_ENCOUNTERS[safeIndex];
   return encounter.map((enemy, index) => {
-    const minimumHp = Math.floor(enemy.maxHp * 0.9);
+    const minimumHp = enemy.name === "쥐"
+      ? enemy.maxHp - 1
+      : Math.floor(enemy.maxHp * 0.9);
     const rolledMaxHp = Math.min(
       enemy.maxHp,
       enemy.isBoss ? enemy.maxHp : minimumHp + Math.floor(random() * (enemy.maxHp - minimumHp + 1)),

@@ -77,7 +77,7 @@ test("debug enemy codex is derived from every encounter and its spawn regions", 
   assert.deepEqual(golem.regions, [2]);
   const rats = entries.find((entry) => entry.label === "쥐 3마리");
   assert.equal(rats.enemies[0].count, 3);
-  assert.equal(rats.enemies[0].enemy.maxHp, 10);
+  assert.equal(rats.enemies[0].enemy.maxHp, 13);
 });
 
 test("each region has a three-percent chance to use the next region enemy pool", () => {
@@ -93,7 +93,7 @@ test("each region has a three-percent chance to use the next region enemy pool",
 test("orange slime rolls 36 to 40 health and alternates its upgraded pattern", () => {
   const slime = createSewerEncounterByIndex(1, () => 0)[0];
   const actions = slime.actions;
-  assert.equal(slime.hp, 36);
+  assert.equal(slime.hp, 45);
   assert.equal(slime.intentIndex, 0);
   assert.equal(actions.length, 2);
   assert.equal(actions[0].attacks[0].value, 9);
@@ -107,7 +107,7 @@ test("orange slime rolls 36 to 40 health and alternates its upgraded pattern", (
 test("golem deals 8 damage during its waits and 30 damage on attack turns", () => {
   const golem = createSewerEncounterByIndex(2, () => 1)[0];
   assert.equal(golem.name, "골렘");
-  assert.equal(golem.hp, 90);
+  assert.equal(golem.hp, 112);
   assert.equal(golem.intentIndex, 0);
   assert.deepEqual(golem.actions.map((action) => action.name), ["...", "...!", "공격", "...", "공격"]);
   assert.deepEqual(golem.actions.slice(0, 2).map((action) => action.attacks[0].value), [8, 8]);
@@ -124,7 +124,7 @@ test("golem deals 8 damage during its waits and 30 damage on attack turns", () =
 test("sewer rat uses the requested discard patterns", () => {
   const rat = createSewerEncounterByIndex(3, () => 1)[0];
   assert.equal(rat.name, "하수구 쥐");
-  assert.equal(rat.hp, 40);
+  assert.equal(rat.hp, 50);
   assert.deepEqual(rat.actions[0].attacks, [{ type: "physical", value: 5, hits: 2 }]);
   assert.equal(rat.actions[0].discardCount, 1);
   assert.deepEqual(rat.actions[1].attacks, [{ type: "physical", value: 10 }]);
@@ -139,7 +139,7 @@ test("sewer rat uses the requested discard patterns", () => {
 test("goblin repeats 14, 8x2, and 7x3 physical attacks", () => {
   const goblin = createSewerEncounterByIndex(4, () => 1)[0];
   assert.equal(goblin.name, "도깨비");
-  assert.equal(goblin.hp, 66);
+  assert.equal(goblin.hp, 82);
   assert.equal(goblin.actions[0].attacks[0].value, 14);
   assert.equal(goblin.actions[0].attacks[0].hits, undefined);
   assert.equal(goblin.actions[1].attacks[0].value, 8);
@@ -151,19 +151,21 @@ test("goblin repeats 14, 8x2, and 7x3 physical attacks", () => {
 
 test("small wizard always attacks with 8 magic damage", () => {
   const wizard = createSewerEncounterByIndex(0, () => 0)[0];
-  assert.equal(wizard.hp, 27);
+  assert.equal(wizard.hp, 33);
   assert.deepEqual(wizard.actions[0].attacks, [{ type: "magic", value: 8 }]);
 });
 
-test("three rats are 10-health enemies with fixed 6 damage", () => {
-  const rats = createSewerEncounterByIndex(5, () => 0);
-  assert.equal(rats.length, 3);
-  assert.ok(rats.every((rat) => rat.hp === 9 && rat.actions[0].attacks[0].value === 6));
+test("three rats roll 12 to 13 health with fixed 6 damage", () => {
+  const minimumRats = createSewerEncounterByIndex(5, () => 0);
+  const maximumRats = createSewerEncounterByIndex(5, () => 1);
+  assert.equal(minimumRats.length, 3);
+  assert.ok(minimumRats.every((rat) => rat.hp === 12 && rat.actions[0].attacks[0].value === 6));
+  assert.ok(maximumRats.every((rat) => rat.hp === 13));
 });
 
 test("warlock attacks immediately while applying delayed physical vulnerability", () => {
   const warlock = createSewerEncounterByIndex(6, () => 0)[0];
-  assert.equal(warlock.hp, 49);
+  assert.equal(warlock.hp, 61);
   assert.deepEqual(warlock.actions[0].attacks[0], { type: "magic", value: 12 });
   assert.equal(warlock.actions[0].nextTurnPhysicalVulnerabilityGain, 2);
   assert.equal(warlock.actions[0].nextTurnMagicVulnerabilityGain, undefined);
@@ -173,7 +175,7 @@ test("warlock attacks immediately while applying delayed physical vulnerability"
 
 test("green slime randomly chooses either 10-damage pattern", () => {
   const slime = createSewerEncounterByIndex(7, () => 0)[0];
-  assert.equal(slime.hp, 36);
+  assert.equal(slime.hp, 45);
   assert.deepEqual(slime.actions.map((action) => action.attacks), [
     [{ type: "physical", value: 10 }],
     [{ type: "physical", value: 10 }],
@@ -198,13 +200,13 @@ test("mana beast encounter includes a fixed dual attack and delayed magic vulner
 test("second-region small wizard encounter contains two wizards", () => {
   const encounter = createSewerEncounterByIndex(9, () => 1);
   assert.equal(encounter.length, 2);
-  assert.ok(encounter.every((enemy) => enemy.name === "작은 마법사" && enemy.hp === 30));
+  assert.ok(encounter.every((enemy) => enemy.name === "작은 마법사" && enemy.hp === 37));
 });
 
 test("third-region mummy encounters have their starting statuses and patterns", () => {
   const priest = createSewerEncounterByIndex(10, () => 1)[0];
   assert.equal(priest.name, "미라 사제");
-  assert.equal(priest.hp, 70);
+  assert.equal(priest.hp, 87);
   assert.equal(priest.boon, 5);
   assert.equal(priest.actions[0].boonGain, 2);
   assert.equal(priest.actions[0].nextTurnMagicVulnerabilityGain, 1);
@@ -213,7 +215,7 @@ test("third-region mummy encounters have their starting statuses and patterns", 
 
   const warrior = createSewerEncounterByIndex(11, () => 1)[0];
   assert.equal(warrior.name, "미라 전사");
-  assert.equal(warrior.hp, 100);
+  assert.equal(warrior.hp, 125);
   assert.equal(warrior.berserk, 1);
   assert.deepEqual(warrior.actions[0].attacks, [{ type: "physical", value: 4, hits: 3 }]);
   assert.deepEqual(warrior.actions[1].attacks, [{ type: "physical", value: 16 }]);
@@ -224,10 +226,10 @@ test("third-region mummy encounters have their starting statuses and patterns", 
 test("boon blocks one hit per stack and berserk grants strength at player turn start", () => {
   const priest = createSewerEncounterByIndex(10, () => 1)[0];
   const afterTwoHits = applyPlayerAttack(priest, 20, 2);
-  assert.equal(afterTwoHits.hp, 70);
+  assert.equal(afterTwoHits.hp, 87);
   assert.equal(afterTwoHits.boon, 3);
   const afterSixHits = applyPlayerAttack(priest, 20, 6);
-  assert.equal(afterSixHits.hp, 50);
+  assert.equal(afterSixHits.hp, 67);
   assert.equal(afterSixHits.boon, 0);
 
   const warrior = createSewerEncounterByIndex(11, () => 1)[0];
@@ -237,7 +239,7 @@ test("boon blocks one hit per stack and berserk grants strength at player turn s
 test("third-region wyrm shows soil as its current intent", () => {
   const wyrm = createSewerEncounterByIndex(12, () => 1)[0];
   assert.equal(wyrm.name, "지룡");
-  assert.equal(wyrm.hp, 95);
+  assert.equal(wyrm.hp, 118);
   assert.equal(wyrm.actions[0].soilCount, 1);
   assert.equal(wyrm.actions[0].nextTurnPhysicalVulnerabilityGain, 1);
   assert.deepEqual(wyrm.actions[1].attacks, [{ type: "physical", value: 15 }]);
@@ -247,7 +249,7 @@ test("third-region wyrm shows soil as its current intent", () => {
 test("boss encounters have fixed health and the requested repeating patterns", () => {
   const blackSlime = createSewerEncounterByIndex(14, () => 0)[0];
   assert.equal(blackSlime.name, "검은 슬라임");
-  assert.equal(blackSlime.hp, 70);
+  assert.equal(blackSlime.hp, 87);
   assert.equal(blackSlime.isBoss, true);
   assert.equal(blackSlime.toxicSlimeCount, 2);
   assert.deepEqual(blackSlime.actions.map((action) => action.attacks), [
@@ -259,7 +261,7 @@ test("boss encounters have fixed health and the requested repeating patterns", (
 
   const clown = createSewerEncounterByIndex(15, () => 0)[0];
   assert.equal(clown.name, "광대");
-  assert.equal(clown.hp, 110);
+  assert.equal(clown.hp, 137);
   assert.ok(clown.actions.every((action) => action.discardCount === 5));
   assert.deepEqual(clown.actions.map((action) => action.attacks), [
     [{ type: "physical", value: 20 }],
@@ -270,7 +272,7 @@ test("boss encounters have fixed health and the requested repeating patterns", (
 
   const giantWyrm = createSewerEncounterByIndex(16, () => 0)[0];
   assert.equal(giantWyrm.name, "거대 지룡");
-  assert.equal(giantWyrm.hp, 150);
+  assert.equal(giantWyrm.hp, 187);
   assert.equal(giantWyrm.actions[0].firstActionRockCount, 2);
   assert.equal(giantWyrm.actions[0].rockCount, 1);
   assert.equal(giantWyrm.actions[0].strengthGain, 4);
@@ -280,7 +282,7 @@ test("boss encounters have fixed health and the requested repeating patterns", (
 test("thorn beetles start with four thorns and choose non-repeating patterns", () => {
   const beetles = createSewerEncounterByIndex(13, () => 1);
   assert.equal(beetles.length, 2);
-  assert.ok(beetles.every((beetle) => beetle.name === "가시 딱정벌레" && beetle.hp === 45 && beetle.thorns === 4));
+  assert.ok(beetles.every((beetle) => beetle.name === "가시 딱정벌레" && beetle.hp === 56 && beetle.thorns === 4));
   assert.equal(beetles[0].actions[0].randomNoRepeat, true);
   assert.equal(beetles[0].actions[2].strengthLoss, 2);
   assert.equal(beetles[0].actions[2].agilityLoss, 2);
@@ -290,6 +292,6 @@ test("thorn beetles start with four thorns and choose non-repeating patterns", (
 });
 
 test("enemy health rolls from floor 90 percent through full base health", () => {
-  assert.equal(createSewerEncounterByIndex(2, () => 0)[0].hp, 81);
-  assert.equal(createSewerEncounterByIndex(2, () => 0.999)[0].hp, 90);
+  assert.equal(createSewerEncounterByIndex(2, () => 0)[0].hp, 100);
+  assert.equal(createSewerEncounterByIndex(2, () => 0.999)[0].hp, 112);
 });

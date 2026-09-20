@@ -9,6 +9,7 @@ import {
   SPECIAL_CARD_POOL,
   STARTER_CARD_POOL,
   createRadianceCard,
+  isAttackCard,
 } from "../app/game/cards.ts";
 
 test("card pools preserve the current content counts", () => {
@@ -18,6 +19,10 @@ test("card pools preserve the current content counts", () => {
   assert.equal(RARE_CARD_POOL.length, 16);
   assert.equal(LEGENDARY_CARD_POOL.length, 6);
   assert.equal(ALL_CARD_BLUEPRINTS.length, 62);
+});
+
+test("radiance is treated as an attack card", () => {
+  assert.equal(isAttackCard(createRadianceCard(100)), true);
 });
 
 test("current card data keeps key balance values and removed systems absent", () => {
@@ -49,8 +54,9 @@ test("current card data keeps key balance values and removed systems absent", ()
   );
   assert.equal(RARE_CARD_POOL.find((card) => card.name === "초신성")?.value, 3);
   const oldCore = SPECIAL_CARD_POOL.find((card) => card.name === "낡은 노심");
-  assert.equal(oldCore?.cost, 0);
-  assert.equal(oldCore?.exhaust, true);
+  assert.equal(oldCore?.cost, 1);
+  assert.equal(oldCore?.exhaust, undefined);
+  assert.equal(RARE_CARD_POOL.find((card) => card.name === "유성우")?.value, 9);
   assert.deepEqual(
     SPECIAL_CARD_POOL.filter((card) => ["빛무리", "대형 프리즘", "성운"].includes(card.name)).map(({ name, cost, value }) => ({ name, cost, value })),
     [
