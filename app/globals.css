@@ -911,6 +911,24 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   pointer-events: none;
 }
 
+.map-wait-notice {
+  position: absolute;
+  z-index: 13;
+  color: #fff2b8;
+  text-shadow: 0 2px 5px rgba(0,0,0,.75);
+  font: 900 24px/1 Arial, sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 16px));
+  animation: map-wait-notice-rise-fade 1.2s ease-out both;
+}
+
+@keyframes map-wait-notice-rise-fade {
+  0% { opacity: 0; transform: translate(-50%, calc(-100% - 8px)); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, calc(-100% - 30px)); }
+}
+
 .map-bomb {
   position: absolute;
   z-index: 11;
@@ -1486,7 +1504,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
 .map-telemetry-trigger {
   position: absolute;
   right: 10px;
-  bottom: 8px;
+  bottom: 42px;
   z-index: 20;
   min-height: 30px;
   padding: 4px 8px;
@@ -1494,6 +1512,24 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   font-size: 11px;
 }
 .map-telemetry-trigger:hover { opacity: 1; }
+.map-battle-check-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #4f7654;
+  border-radius: 3px;
+  color: #36533a;
+  background: rgba(226, 237, 216, .92);
+  cursor: pointer;
+  font: 700 11px Arial, sans-serif;
+}
+.map-battle-check-toggle input { margin: 0; accent-color: #36533a; }
 .result-telemetry-trigger {
   position: fixed;
   right: 16px;
@@ -2358,7 +2394,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   white-space: normal;
   overflow-wrap: break-word;
   text-align: left;
-  transform: translateY(-50%);
+  transform: translateY(calc(-50% - 1px));
   pointer-events: none;
 }
 .deck-edition-tooltip > strong {
@@ -5027,12 +5063,13 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   width: auto;
   max-width: none;
   padding-inline: 6px;
+  padding-top: 0;
   box-sizing: border-box;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   line-height: 1.2;
-  letter-spacing: normal;
+  letter-spacing: -.65px;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;

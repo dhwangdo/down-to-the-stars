@@ -86,7 +86,7 @@ export const CONSUMABLE_TYPES: TicketType[] = [...TICKET_TYPES];
 export function consumableTypeFromRoll(roll: number) {
   const weightedTypes = CONSUMABLE_TYPES.map((type) => ({
     type,
-    weight: 0.5 ** (TICKET_TIERS[type] - 1),
+    weight: (1 / 3) ** (TICKET_TIERS[type] - 1),
   }));
   const totalWeight = weightedTypes.reduce((sum, item) => sum + item.weight, 0);
   let cursor = Math.max(0, Math.min(.999999999, roll)) * totalWeight;

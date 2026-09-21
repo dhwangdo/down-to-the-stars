@@ -304,6 +304,6 @@ $env:GITHUB_ACTIONS='true'; npm run build:pages
 - push: 로컬 commit을 GitHub로 전송
 - GitHub Actions: `main` push를 감지해 Pages 빌드·배포 시도
 
-공개 주소는 `https://dhwangdo.github.io/down-to-the-stars/`다.
+공개 주소는 `https://dhwangdo.github.io/ruinfall/`다.
 
 최근 배포 실패 중에는 코드가 실행되기 전 GitHub runner가 시작하지 못한 `startup_failure` 사례도 있었다. 배포가 실패하면 먼저 로컬 빌드 결과와 Actions 로그를 나눠서 확인한다.

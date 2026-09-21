@@ -83,7 +83,10 @@ export function getCardKeywordInfos(card: Card): CardKeywordInfo[] {
   if (card.rule) add("룰");
   if (card.exhaust && !card.rule) add("소멸");
   if (card.token) add("토큰");
-  if (card.effect === "obsidianDagger" || card.effect === "odinSpear" || card.forgeCost !== undefined || card.forgeCosts?.length || card.forgeTargetName || card.forgeAny) add("재련");
+  if (card.effect === "obsidianDagger" || card.effect === "odinSpear" || (
+    !["astronomyResearch", "necromancyResearch"].includes(card.effect)
+    && (card.forgeCost !== undefined || card.forgeCosts?.length || card.forgeTargetName || card.forgeAny)
+  )) add("재련");
   if (card.solitaireRule === "spell") add("주문");
   if (UNPLAYABLE_CARD_EFFECTS.has(card.effect)) add("사용 불가");
   // 흙은 생성 경로와 무관하게 두 키워드를 항상 노출한다.
@@ -129,6 +132,7 @@ export function canPlaceBySolitaireRule(movingCard: Card, targetCard?: Card) {
 }
 
 export function canForgeCardOnto(movingCard: Card, targetCard?: Card, lawResearchCount = 0, forgeCount = 0) {
+  if (movingCard.effect === "astronomyResearch" || movingCard.effect === "necromancyResearch") return false;
   if (!targetCard) return false;
   if (movingCard.effect === "obsidianDagger") {
     return isAttackCard(targetCard);

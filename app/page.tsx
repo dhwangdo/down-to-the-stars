@@ -1316,7 +1316,6 @@ const DEFENSE_WATERMARK_EFFECTS = new Set<CardEffect>([
   "iceShield",
   "waterWave",
   "plateArmorDefense",
-  "ironWall",
   "starGuard",
   "starArk",
 ]);
@@ -1411,7 +1410,7 @@ function CardFace({
       case "drawEachPile":
         return <span>모든 파일에서 카드를 1장씩 뽑습니다.</span>;
       case "dash":
-        return <span>카드를 1장 뽑습니다. 무작위 파일에서 카드를 1장씩 {card.forged ? 3 : "1[3]"}번 뽑습니다.</span>;
+        return <span>무작위 파일에서 카드를 1장씩 2[3]번 뽑습니다.</span>;
       case "quickStep":
         return <span>카드를 {card.draw}장 뽑습니다.</span>;
       case "rulerCompass":
@@ -1439,7 +1438,7 @@ function CardFace({
       case "warmUp":
         return <span><strong className="effect-keyword">힘</strong>을 1 얻습니다. 이번 턴 <strong className="effect-keyword">힘</strong>을 {card.value} 추가로 얻습니다.</span>;
       case "ironWall":
-        return <><span><span className="effect-type physical">방어</span>를 {defenseNumber} 얻습니다.</span><span><strong className="effect-keyword">물리 저항</strong>을 {IRON_WALL_RESISTANCE} 얻습니다.</span></>;
+        return <span><strong className="effect-keyword">물리 저항</strong>을 {IRON_WALL_RESISTANCE} 얻습니다.</span>;
       case "fourHit":
         return <span><span className="effect-type damage">피해</span>를 {damageNumber}씩 4번 줍니다.</span>;
       case "doubleHit":
@@ -1459,9 +1458,9 @@ function CardFace({
       case "obsidianDagger":
         return <><span><span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span><span>[밑패를 <strong className="effect-keyword">소멸</strong>시키고 피해량을 이 카드에 추가합니다.]</span><span>무한히 <strong className="effect-keyword">재련</strong>할 수 있습니다.</span></>;
       case "astronomyResearch":
-        return <span>한 턴에 한 번, <span className="effect-star">★★</span>을 지불하고 원하는 파일의 맨 위 카드를 손패로 가져옵니다. {card.forged ? <><span className="effect-star">★★★</span>을 얻습니다.</> : <>[<span className="effect-star">★★★</span>을 얻습니다.]</>}</span>;
+        return <span>한 턴에 한 번, <span className="effect-star">★★</span>을 지불하고 원하는 파일의 맨 위 카드를 손패로 가져옵니다.</span>;
       case "necromancyResearch":
-        return <span>한 턴에 한 번, <span className="effect-star">★★★</span>을 지불하고 버린 카드 더미에서 원하는 카드 1장을 손패로 가져옵니다. {card.forged ? <><span className="effect-star">★★★</span>을 얻습니다.</> : <>[<span className="effect-star">★★★</span>을 얻습니다.]</>}</span>;
+        return <span>한 턴에 한 번, <span className="effect-star">★★★</span>을 지불하고 버린 카드 더미에서 원하는 카드 1장을 손패로 가져옵니다.</span>;
       case "metallurgyResearch":
         return <span>카드를 <strong className="effect-keyword">재련</strong>할 때마다 <strong className="effect-keyword">재련</strong>된 카드를 가져옵니다.</span>;
       case "economicsResearch":
@@ -1561,7 +1560,7 @@ function CardFace({
       )}
       {!UNPLAYABLE_CARD_EFFECTS.has(card.effect) && <span className={`card-cost ${costChangeClass}`}>{displayedCost}</span>}
       <strong className={`card-name rarity-${card.rarity} watermark-category-${cardWatermarkCategory(card)} ${UNPLAYABLE_CARD_EFFECTS.has(card.effect) ? "is-unplayable" : ""} ${card.rarity === "legendary" ? "is-painted is-legendary" : ""}`}>
-        {card.name}{card.effect === "obsidianDagger" && cardForgeCount(card) > 0 ? ` +${cardForgeCount(card)}` : card.forged ? "+" : ""}
+        {card.name}{card.effect === "obsidianDagger" && cardForgeCount(card) > 0 ? ` +${cardForgeCount(card)}` : card.forged && !["astronomyResearch", "necromancyResearch"].includes(card.effect) ? "+" : ""}
       </strong>
       <span ref={cardEffectRef} className="card-effect">{emphasizeEffectNumbers(<>
         <span className="card-effect-copy">
@@ -1576,9 +1575,11 @@ function CardFace({
             {cardForgeCount(card) > 0 && <strong className="solitaire-rule forge-rule effect-keyword">재련됨.</strong>}
             <strong className="solitaire-rule forge-rule"><span className="effect-keyword">재련</span>: [공격]</strong>
           </>
-          : card.forged
+          : card.forged && !["astronomyResearch", "necromancyResearch"].includes(card.effect)
             ? <strong className="solitaire-rule forge-rule effect-keyword">재련됨.</strong>
-            : (card.forgeCost !== undefined || card.forgeCosts || card.forgeTargetName || card.forgeAny) && <strong className="solitaire-rule forge-rule"><span className="effect-keyword">재련</span>: {forgeConditionText(card)}</strong>}
+            : !["astronomyResearch", "necromancyResearch"].includes(card.effect)
+              && (card.forgeCost !== undefined || card.forgeCosts || card.forgeTargetName || card.forgeAny)
+              && <strong className="solitaire-rule forge-rule"><span className="effect-keyword">재련</span>: {forgeConditionText(card)}</strong>}
       </>)}</span>
     </>
   );
@@ -1619,7 +1620,7 @@ function DeckEditorCardIcon({ card, count = 1, showNewBadge = false }: {
   return (
     <>
       {cost !== "" && cost !== undefined && <span className="editor-card-cost">{cost}</span>}
-      <strong className="editor-card-name">{card.name}{card.effect === "obsidianDagger" && cardForgeCount(card) > 0 ? ` +${cardForgeCount(card)}` : card.forged ? "+" : ""}</strong>
+      <strong className="editor-card-name">{card.name}{card.effect === "obsidianDagger" && cardForgeCount(card) > 0 ? ` +${cardForgeCount(card)}` : card.forged && !["astronomyResearch", "necromancyResearch"].includes(card.effect) ? "+" : ""}</strong>
       {card.colored && <em className="deck-card-painted">색칠</em>}
       {showNewBadge && <em className="deck-card-new">NEW!</em>}
       {count > 1 && <span className="inventory-card-count">x{count}</span>}
@@ -1806,10 +1807,12 @@ export default function Home() {
   const [constellationPreviewIndex, setConstellationPreviewIndex] = useState<number | null>(null);
   const [mapMessage, setMapMessage] = useState("");
   const [mapMessageNonce, setMapMessageNonce] = useState(0);
+  const [mapWaitNoticeNonce, setMapWaitNoticeNonce] = useState(0);
   const [ownedDecks, setOwnedDecks] = useState<DeckCase[]>(() => [createStarterDeck()]);
   const [activeDeckId, setActiveDeckId] = useState("starter");
   const previousBattleDeckIdRef = useRef<string | null>(null);
   const [pendingBattleStart, setPendingBattleStart] = useState<PendingBattleStart | null>(null);
+  const [battleDeckCheckEnabled, setBattleDeckCheckEnabled] = useState(true);
   const [battleDeckPreviewId, setBattleDeckPreviewId] = useState<string | null>(null);
   const [deckSelectorOpen, setDeckSelectorOpen] = useState(false);
   const [deckSelectorClosing, setDeckSelectorClosing] = useState(false);
@@ -1903,6 +1906,8 @@ export default function Home() {
   const [game, setGame] = useState<GameState>(waitingState);
 
   useLayoutEffect(() => {
+    // 의도적인 파생 전투 상태 동기화: 빈 파일 수가 바뀌면 여백의 미 힘을 즉시 반영한다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGame((current) => {
       const nextBonus = current.deckEditions.includes("whiteSpace")
         ? current.piles.filter((pile) => pile.length === 0).length * 2
@@ -1998,7 +2003,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `down-to-the-stars-damage-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    anchor.download = `ruinfall-damage-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
     anchor.click();
     URL.revokeObjectURL(url);
     setTelemetryMessage(`적별 피해 기록을 TXT로 저장했습니다. (탐험 ${telemetry.store.runs.length}개)`);
@@ -2142,7 +2147,7 @@ export default function Home() {
     setMapMessage("디버그 모드를 종료했습니다.");
   };
   const handleGoldDebugClick = () => {
-    const now = Date.now();
+    const now = window.performance.now();
     const recentClicks = [...debugGoldClicksRef.current, now].filter((time) => now - time <= 1200);
     debugGoldClicksRef.current = recentClicks;
     if (recentClicks.length < 5) return;
@@ -2744,9 +2749,14 @@ export default function Home() {
     positions: readonly MapPosition[],
     seed = mapSeed,
     world: MapEnemyWorld = mapEnemyWorld,
+    seenPositions: readonly MapPosition[] = positions,
   ) => {
     const uniquePositions = [...new Map(positions.map((position) => [mapRoomKey(position), position])).values()];
     const freshPositions = uniquePositions.filter((position) => !generatedMapRoomKeysRef.current.has(mapRoomKey(position)));
+    const seenRoomKeys = seenPositions.map(mapRoomKey);
+    if (seenRoomKeys.length > 0) {
+      setSeenRooms((current) => new Set([...current, ...seenRoomKeys]));
+    }
     if (freshPositions.length === 0) return world;
 
     const freshRoomKeys = freshPositions.map(mapRoomKey);
@@ -2779,7 +2789,6 @@ export default function Home() {
         return next;
       });
     }
-    setSeenRooms((current) => new Set([...current, ...freshRoomKeys]));
     return nextWorld;
   };
 
@@ -2791,10 +2800,12 @@ export default function Home() {
     verticalRadius = visionVerticalRadius,
   ) => {
     const visibleKeys = visibleMapRoomKeys(position, seed, horizontalRadius, verticalRadius);
+    const visiblePositions = [...visibleKeys].map(parseMapRoomKey);
     return materializeMapContent(
-      [...visibleKeys].map(parseMapRoomKey),
+      [...visiblePositions, ...positionsInSquare(position, 5)],
       seed,
       world,
+      visiblePositions,
     );
   };
 
@@ -2850,7 +2861,8 @@ export default function Home() {
     setDyingEnemyIds(new Set());
     setAnimatedEnemyHp({});
     setHoveredDeckCard(null);
-    clearCardKeywordHover();
+    setKeywordHoverRequest(null);
+    setHoveredCardKeywords(null);
     setAttackingEnemyId(null);
     setDamagePopup(null);
     setBattleRewards([]);
@@ -2967,7 +2979,7 @@ export default function Home() {
     battleRewardIsBossRef.current = encounters.some((encounter) => encounter.isBoss === true);
     battleRewardIsOutOfDepthRef.current = encounters.some((encounter) =>
       encounter.isBoss !== true && isHigherRegionMapEnemy(encounter.encounterIndex, mapPosition, mapSeed));
-    if (ownedDecks.length >= 2) {
+    if (battleDeckCheckEnabled && ownedDecks.length >= 2) {
       setDeckSelectionAttention(true);
       setPendingBattleStart({ encounters, playerHp });
       setBattleDeckPreviewId(activeDeckId);
@@ -2988,11 +3000,13 @@ export default function Home() {
     const seedTimer = window.setTimeout(() => {
       const nextSeed = createRandomMapSeed();
       const initialVisibleKeys = visibleMapRoomKeys(MAP_START, nextSeed);
+      const initialVisiblePositions = [...initialVisibleKeys].map(parseMapRoomKey);
       generatedMapRoomKeysRef.current = new Set();
       const initialWorld = materializeMapContent(
-        [...initialVisibleKeys].map(parseMapRoomKey),
+        [...initialVisiblePositions, ...positionsInSquare(MAP_START, 5)],
         nextSeed,
         { enemies: [] },
+        initialVisiblePositions,
       );
       setMapSeed(nextSeed);
       setMapEnemyWorld(initialWorld);
@@ -3692,7 +3706,7 @@ export default function Home() {
   };
 
   const moveOnMap = (deltaX: number, deltaY: number) => {
-    if (screen !== "map" || mapTraveling) return;
+    if (screen !== "map" || playerNameSetupOpen || mapTraveling) return;
     if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) !== 1) return;
     const nextPosition = {
       x: mapPosition.x + deltaX,
@@ -3720,7 +3734,8 @@ export default function Home() {
   };
 
   const spendMapTurn = () => {
-    if (screen !== "map" || mapTraveling) return;
+    if (screen !== "map" || playerNameSetupOpen || mapTraveling) return;
+    setMapWaitNoticeNonce((current) => current + 1);
     const roomKey = mapRoomKey(mapPosition);
     const revealedWorld = materializeVisibleMapContent(mapPosition, mapSeed, mapEnemyWorld);
     const result = resolveMapStep(mapPosition, mapPosition, revealedWorld);
@@ -3741,7 +3756,7 @@ export default function Home() {
   };
 
   const travelSafePath = (path: MapPosition[]) => {
-    if (screen !== "map" || mapTraveling || path.length < 2) return;
+    if (screen !== "map" || playerNameSetupOpen || mapTraveling || path.length < 2) return;
     if (debugMode) {
       const destination = path.at(-1)!;
       clearMapTravel();
@@ -3926,13 +3941,15 @@ export default function Home() {
     setDarkTicketTurnsRemaining(0);
     darkTicketTurnsRemainingRef.current = 0;
     const initialVisibleKeys = visibleMapRoomKeys(MAP_START, nextSeed);
+    const initialVisiblePositions = [...initialVisibleKeys].map(parseMapRoomKey);
     generatedMapRoomKeysRef.current = new Set();
     setRoomDrops({});
     setRoomConsumableDrops({});
     const initialWorld = materializeMapContent(
-      [...initialVisibleKeys].map(parseMapRoomKey),
+      [...initialVisiblePositions, ...positionsInSquare(MAP_START, 5)],
       nextSeed,
       { enemies: [] },
+      initialVisiblePositions,
     );
     setSeenRooms(initialVisibleKeys);
     setSafeAreaEntrySeenRooms(null);
@@ -4005,7 +4022,8 @@ export default function Home() {
     setDeckViewerOpen(false);
     setDeckEditorSnapshot(null);
     setHoveredDeckCard(null);
-    clearCardKeywordHover();
+    setKeywordHoverRequest(null);
+    setHoveredCardKeywords(null);
     setPendingPaintTicketId(null);
     setPendingCloneTicketId(null);
     setPendingExtractTicketId(null);
@@ -4035,7 +4053,6 @@ export default function Home() {
         ...Object.keys(state.roomConsumableDrops),
       ]);
       setSafeAreaEntrySeenRooms(state.safeAreaEntrySeenRooms ? new Set(state.safeAreaEntrySeenRooms) : null);
-      setMapEnemyWorld(state.mapEnemyWorld);
       setDefeatedBossRegions(new Set(state.defeatedBossRegions));
       setMapEnemyCellMemory(state.mapEnemyCellMemory);
       setMapBombs(state.mapBombs);
@@ -4074,6 +4091,13 @@ export default function Home() {
       inventoryConsumablesRef.current = state.inventoryConsumables;
       setRoomDrops(state.roomDrops);
       setRoomConsumableDrops(state.roomConsumableDrops);
+      const restoredWorld = materializeMapContent(
+        positionsInSquare(state.mapPosition, 5),
+        state.mapSeed,
+        state.mapEnemyWorld,
+        [],
+      );
+      setMapEnemyWorld(restoredWorld);
       setRoomDeckDrops(savedRoomDeckDrops);
       setRoomShops(state.roomShops);
       setBlessingOffers(state.blessingOffers ?? []);
@@ -5469,9 +5493,16 @@ export default function Home() {
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      if (playerNameSetupOpen) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          document.querySelector<HTMLFormElement>(".player-name-dialog")?.requestSubmit();
+        }
+        return;
+      }
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
 
-      if (deckEditorOpen && (event.key === "Escape" || event.key.toLowerCase() === "i")) {
+      if (deckEditorOpen && (event.key === "Escape" || event.key === "Enter" || event.key === "Tab" || event.key.toLowerCase() === "i")) {
         event.preventDefault();
         confirmDeckEditor();
         return;
@@ -5490,18 +5521,32 @@ export default function Home() {
         } else if (shrineOpen) {
           event.preventDefault();
           setShrineOpen(false);
+        } else if (transformShrineOpen) {
+          event.preventDefault();
+          setTransformShrineOpen(false);
+        } else if (combinationShrineOpen) {
+          event.preventDefault();
+          setCombinationShrineOpen(false);
         } else if (blessingOpen) {
           event.preventDefault();
           setBlessingOpen(false);
         } else if (shopOpen) {
           event.preventDefault();
           setShopOpen(false);
+        } else if (openedCardPack) {
+          event.preventDefault();
+          setOpenedCardPack(null);
         }
         return;
       }
 
       if (screen !== "map" || mapTraveling || deckEditorOpen || deckViewerOpen) return;
-      if (event.key.toLowerCase() === "i") {
+      if (event.code === "KeyB" && !event.repeat) {
+        event.preventDefault();
+        handleGoldDebugClick();
+        return;
+      }
+      if (event.key === "Tab" || event.key.toLowerCase() === "i") {
         event.preventDefault();
         openDeckEditor("덱 편집");
         return;
@@ -5514,6 +5559,29 @@ export default function Home() {
       if (event.key === "5" || event.code === "Numpad5") {
         event.preventDefault();
         waitOnMap();
+        return;
+      }
+      if (event.key.toLowerCase() === "e" || event.key === ">" || (event.code === "Period" && event.shiftKey)) {
+        const roomType = effectiveRoomType(mapPosition);
+        const roomActions: Record<string, (() => void) | undefined> = {
+          shop: () => openShop(mapRoomKey(mapPosition), getRegionNumber(mapPosition, mapSeed)),
+          shrine: openShrine,
+          recoveryShrine: useCurrentRecoveryShrine,
+          vitalityShrine: useCurrentVitalityShrine,
+          mindEyeShrine: useCurrentMindEyeShrine,
+          transformShrine: openTransformShrine,
+          combinationShrine: openCombinationShrine,
+          treasureChest: openTreasureChest,
+          blessing: openBlessings,
+          portal: useCurrentPortal,
+          safePortal: useCurrentPortal,
+          heal: useCurrentHeal,
+        };
+        const roomAction = roomActions[roomType];
+        if (roomAction) {
+          event.preventDefault();
+          roomAction();
+        }
         return;
       }
       if (event.key === "+" || (event.code === "Equal" && event.shiftKey) || event.code === "NumpadAdd") {
@@ -5601,8 +5669,11 @@ export default function Home() {
     };
   }, [
     blessingOpen, cardPoolStatsOpen, confirmDeckEditor, deckEditorOpen, deckViewerOpen, mapTraveling,
-    changeMapZoom, moveOnMap, openDeckEditor, quickPickUpFloorItems, resetMapZoom, screen, shopOpen, shrineOpen,
-    setTreasureChestReward, treasureChestReward, waitOnMap,
+    changeMapZoom, effectiveRoomType, mapPosition.x, mapPosition.y, mapSeed, moveOnMap, openBlessings, openCombinationShrine,
+    openDeckEditor, openShop, openShrine, openTransformShrine, openTreasureChest, quickPickUpFloorItems, resetMapZoom,
+    playerNameSetupOpen, screen, shopOpen, shrineOpen, transformShrineOpen, combinationShrineOpen, openedCardPack, handleGoldDebugClick,
+    useCurrentHeal, useCurrentMindEyeShrine, useCurrentPortal, useCurrentRecoveryShrine, useCurrentVitalityShrine,
+    setOpenedCardPack, setTreasureChestReward, treasureChestReward, waitOnMap,
   ]);
 
   const beginMapDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -6110,7 +6181,16 @@ export default function Home() {
       const pommelDrawResult = card.effect === "pommel"
         ? drawFromFirstPile(current.piles)
         : null;
-      const pilesAfterCardDraw = drawEachPileResult?.piles ?? pommelDrawResult?.piles ?? current.piles;
+      const dashRandomCount = card.effect === "dash" && canDraw
+        ? card.forged ? 3 : 2
+        : 0;
+      const dashRandomResult = dashRandomCount > 0
+        ? drawRandomFromPiles(current.piles, dashRandomCount)
+        : null;
+      const pilesAfterCardDraw = drawEachPileResult?.piles
+        ?? pommelDrawResult?.piles
+        ?? dashRandomResult?.piles
+        ?? current.piles;
       const massDealPiles = isMassDeal
         ? card.forged
           ? buildPiles(
@@ -6125,16 +6205,15 @@ export default function Home() {
           )
           : [...current.piles.map((pile) => [...pile]), []]
         : pilesAfterCardDraw;
-      const automaticDrawnCards = drawEachPileResult?.hand ?? pommelDrawResult?.hand ?? [];
+      const automaticDrawnCards = drawEachPileResult?.hand
+        ?? pommelDrawResult?.hand
+        ?? dashRandomResult?.hand
+        ?? [];
       if (automaticDrawnCards.length > 0 && captureDrawOrigins(automaticDrawnCards) > 0) setPhase("drawing");
-      const pendingPileDrawCount = card.effect === "dash" && canDraw
-        ? 1
-        : card.effect === "fileDraw" && !card.forged && canDraw
+      const pendingPileDrawCount = card.effect === "fileDraw" && !card.forged && canDraw
           ? Math.min(card.draw, availableCardCount)
           : 0;
-      const pendingDashRandomDraws = card.effect === "dash" && canDraw
-        ? card.forged ? 3 : 1
-        : 0;
+      const pendingDashRandomDraws = 0;
       const drawsAdded = !won && availableCardCount > 0 && !drawEachPileResult && pendingPileDrawCount === 0
         ? Math.min(card.draw * repetitions, availableCardCount)
         : 0;
@@ -6183,7 +6262,7 @@ export default function Home() {
         if (card.effect === "mirrorImage") return "거울상: 방어와 마법 방어 교환";
         if (card.effect === "blessing") return `가호: 마법 저항 ${card.forged ? 2 : 1} 획득`;
         if (isPlateArmorDefense) return `방어 ${blockGained} 획득${card.forged ? " · 물리 저항 1 획득" : ""}`;
-        if (isIronWall) return `철벽: 방어 ${blockGained} · 물리 저항 ${IRON_WALL_RESISTANCE}`;
+        if (isIronWall) return `철벽: 물리 저항 ${IRON_WALL_RESISTANCE} 획득`;
         if (card.kind === "strike") return `${targetEnemy?.name}에게 피해 ${damage}${repetitions > 1 ? " (2회 발동)" : ""}`;
         if (isBlockCard) return `${DEFENSE_LABEL[card.damageType]} ${blockGained} 획득`;
         if (card.effect === "steelHeart") return `물리 저항 · 마법 저항 ${card.value} 획득`;
@@ -6193,7 +6272,7 @@ export default function Home() {
         if (card.effect === "adrenaline") return `에너지를 1 얻습니다 · 카드 ${card.draw}장 드로우`;
         if (card.effect === "sweep") return canDraw ? "가져올 파일을 선택하세요." : "가져올 카드가 없습니다.";
         if (card.effect === "drawEachPile") return `모든 파일에서 ${drawEachPileResult?.hand.length ?? 0}장 뽑음`;
-        if (card.effect === "dash") return canDraw ? "질주: 원하는 파일을 선택하세요." : "질주: 드로우할 카드가 없습니다.";
+        if (card.effect === "dash") return `질주: 무작위 파일에서 ${dashRandomResult?.hand.length ?? 0}장 뽑음`;
         if (card.effect === "berserk") return "에너지를 2 얻습니다 · 물리 취약 2 획득";
         if (card.effect === "transcend") return "이번 턴 피해 면역 · 힘 5 획득";
         if (card.effect === "rapidFire") return "이번 턴 다음 공격 카드가 2회 발동";
@@ -6219,9 +6298,6 @@ export default function Home() {
         : "";
       return {
         ...current,
-        // 질주는 첫 번째 파일 선택을 drawSelectedPile에서 처리한다.
-        // 여기서 존재하지 않는 이전 결과 변수를 참조하면 일반 카드 사용 시
-        // 브라우저 런타임 오류가 나서 ALL 덱 전투가 멈출 수 있다.
         hand: [...remainingHand, ...(automaticDrawnCards ?? []), ...generatedRadiances],
         // 강화는 사용 후에도 다음 셔플 전까지 유지된다. 셔플 때 prepareDeckForPiles가 해제한다.
         discard: card.exhaust || card.token
@@ -6245,8 +6321,6 @@ export default function Home() {
                 ? 1
               : card.effect === "starArk"
                 ? 1
-                : card.effect === "astronomyResearch" || card.effect === "necromancyResearch"
-                  ? card.forged ? 3 : 0
                 : card.effect === "superStrategist"
                   ? card.value
                   : card.effect === "aries"
@@ -8016,10 +8090,17 @@ export default function Home() {
               <p>새 탐험</p>
               <h2 id="player-name-title">이름을 정하세요</h2>
               <input
-                autoFocus
+                type="text"
                 value={playerName}
                 maxLength={16}
                 onChange={(event) => setPlayerName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 aria-label="플레이어 이름"
               />
               <button
@@ -8124,7 +8205,7 @@ export default function Home() {
               disabled={mapTraveling}
               aria-label="한 턴 쉬기: 현재 칸에 머물며 적만 행동하게 합니다"
             >
-              한 턴 쉼 (5)
+              한 턴 쉼
             </button>
             {canEditDeck && (
               <button
@@ -8136,7 +8217,7 @@ export default function Home() {
                 aria-label={`덱 편집, 현재 ${deckCards.length}장`}
               >
                 <span className="deck-stack-icon" aria-hidden="true" />
-                <span>덱 편집 (I)</span>
+                <span>덱 편집</span>
               </button>
             )}
           </div>
@@ -8491,6 +8572,17 @@ export default function Home() {
                 }}
                 aria-hidden="true"
               >@</span>
+              {mapWaitNoticeNonce > 0 && (
+                <span
+                  key={mapWaitNoticeNonce}
+                  className="map-wait-notice"
+                  style={{
+                    left: MAP_PADDING + (mapPosition.x - DUNGEON_MIN_X + MAP_WORLD_MARGIN_X) * (MAP_ROOM_WIDTH + MAP_CELL_GAP) + MAP_ROOM_WIDTH / 2,
+                    top: MAP_PADDING + (mapPosition.y + MAP_WORLD_MARGIN_Y) * (MAP_ROOM_HEIGHT + MAP_CELL_GAP) + MAP_ROOM_HEIGHT / 2,
+                  }}
+                  aria-live="polite"
+                >한 턴 쉼</span>
+              )}
             </div>
             <div className="map-depth-fade" aria-hidden="true" />
             {!playerVisibleInViewport && mapViewportSize.width > 0 && mapViewportSize.height > 0 && (
@@ -8763,7 +8855,6 @@ export default function Home() {
                   {floorItemNames.length === 1
                     ? " 줍기"
                     : ` 외 떨어진 물건 ${floorItemNames.length - 1}개 줍기`}
-                  {" (G)"}
                 </strong>
               </button>
             )}
@@ -8778,6 +8869,22 @@ export default function Home() {
             <span aria-hidden="true">⇩</span>
             <span>기록 저장</span>
           </button>
+          <label className="map-battle-check-toggle">
+            <input
+              type="checkbox"
+              checked={battleDeckCheckEnabled}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                setBattleDeckCheckEnabled(enabled);
+                if (!enabled) {
+                  setPendingBattleStart(null);
+                  setBattleDeckPreviewId(null);
+                  setDeckSelectionAttention(false);
+                }
+              }}
+            />
+            <span>잠깐!</span>
+          </label>
         </section>
 
         {treasureChestReward && (

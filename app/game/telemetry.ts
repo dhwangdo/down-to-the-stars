@@ -99,7 +99,7 @@ export type TelemetryRun = {
 
 export type TelemetryStore = {
   schemaVersion: number;
-  game: "Down to the Stars";
+  game: "Ruinfall";
   runs: TelemetryRun[];
 };
 
@@ -131,7 +131,7 @@ function makeId(prefix: string) {
 }
 
 function emptyStore(): TelemetryStore {
-  return { schemaVersion: TELEMETRY_SCHEMA_VERSION, game: "Down to the Stars", runs: [] };
+  return { schemaVersion: TELEMETRY_SCHEMA_VERSION, game: "Ruinfall", runs: [] };
 }
 
 function loadStore(): TelemetryStore {
@@ -162,7 +162,7 @@ function loadStore(): TelemetryStore {
     }));
     return {
       schemaVersion: TELEMETRY_SCHEMA_VERSION,
-      game: "Down to the Stars",
+      game: "Ruinfall",
       runs,
     };
   } catch {
@@ -381,7 +381,7 @@ function formatTelemetryAmount(amount: number) {
 }
 
 export function exportTelemetryText(recorder: TelemetryRecorder) {
-  const lines = ["Down to the Stars 피해 기록", `저장 시각: ${new Date().toISOString()}`, ""];
+  const lines = ["Ruinfall 피해 기록", `저장 시각: ${new Date().toISOString()}`, ""];
   recorder.store.runs.forEach((run, runIndex) => {
     lines.push(`탐험 ${runIndex + 1}`);
     run.acquisitions.forEach((acquisition) => {

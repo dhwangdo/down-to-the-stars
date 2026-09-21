@@ -24,10 +24,13 @@ test("fixed defense gains add toughness before applying the defense multiplier",
   const options = { agility: 3, defenseMultiplier: 2 };
 
   assert.equal(calculateDefenseGain({ effect: "defend", value: 5 }, options), 16);
-  assert.equal(calculateDefenseGain({ effect: "ironWall", value: 2 }, options), 16);
   assert.equal(calculateDefenseGain({ effect: "iceShield", value: 11 }, options), 28);
   assert.equal(calculateDefenseGain({ effect: "waterWave", value: 5 }, options), 16);
-  assert.equal(getDefenseBaseValue({ effect: "ironWall", value: 2 }), 5);
+});
+
+test("iron wall no longer grants defense", () => {
+  assert.equal(calculateDefenseGain({ effect: "ironWall", value: 2 }, { agility: 3, defenseMultiplier: 2 }), 0);
+  assert.equal(getDefenseBaseValue({ effect: "ironWall", value: 2 }), 0);
 });
 
 test("fixed multi-purpose defense effects use the same calculation", () => {
@@ -36,7 +39,6 @@ test("fixed multi-purpose defense effects use the same calculation", () => {
   assert.equal(calculateDefenseGain({ effect: "ironRampage", value: 8 }, options), 11);
   assert.equal(calculateDefenseGain({ effect: "starArk", value: 10 }, options), 13);
   assert.equal(calculateDefenseGain({ effect: "odinSpear", value: 40 }, options), 18);
-  assert.equal(calculateDefenseGain({ effect: "ironWall", value: 2 }, { ...options, repetitions: 2 }), 16);
 });
 
 test("cards without ordinary defense values stay at zero without a base override", () => {

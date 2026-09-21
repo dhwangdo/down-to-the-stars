@@ -311,7 +311,7 @@ function awarenessAfterDetection(
   const detectionChance = distance === 1
     ? 0.5
     : distance === 2 && detectionDistanceReduction < 1
-      ? 0.1
+      ? 0.05
       : 0;
   if (detectionChance === 0 || random() / detectionMultiplier >= detectionChance) return awareness;
   if (awareness === "sleeping") return "awake";

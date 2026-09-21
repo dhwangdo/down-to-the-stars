@@ -162,8 +162,8 @@ export const LEGACY_SPECIAL_CARD_POOL: CardBlueprint[] = [
 
 // 현재 플레이에 등장하는 추가 카드는 이 목록만 사용합니다.
 export const SPECIAL_CARD_POOL: CardBlueprint[] = [
-  { kind: "skill", effect: "astronomyResearch", rarity: "special", name: "천문학 연구", cost: 1, value: 3, draw: 0, damageType: "physical", forgeCost: 2, exhaust: true, rule: true },
-  { kind: "skill", effect: "necromancyResearch", rarity: "special", name: "강령학 연구", cost: 1, value: 3, draw: 0, damageType: "physical", forgeCost: 2, exhaust: true, rule: true },
+  { kind: "skill", effect: "astronomyResearch", rarity: "special", name: "천문학 연구", cost: 0, value: 3, draw: 0, damageType: "physical", exhaust: true, rule: true },
+  { kind: "skill", effect: "necromancyResearch", rarity: "special", name: "강령학 연구", cost: 0, value: 3, draw: 0, damageType: "physical", exhaust: true, rule: true },
   { kind: "skill", effect: "metallurgyResearch", rarity: "special", name: "금속학 연구", cost: 1, value: 1, draw: 0, damageType: "physical", exhaust: true, rule: true },
   { kind: "skill", effect: "lightCluster", rarity: "special", name: "빛무리", cost: 0, value: 1, draw: 0, damageType: "physical" },
   { kind: "skill", effect: "largePrism", rarity: "special", name: "대형 프리즘", cost: 3, value: 3, draw: 0, damageType: "physical" },
@@ -257,7 +257,7 @@ export const CARD_POOL_ENERGY_EFFECTS = new Set<CardEffect>([
   "focus", "adrenaline", "berserk", "ventilate", "plateArmor", "charge", "flood", "endStart", "supernova", "aries", "economicsResearch",
 ]);
 export const CARD_POOL_DEFENSE_EFFECTS = new Set<CardEffect>([
-  "defend", "deflect", "iceShield", "waterWave", "plateArmorDefense", "starGuard", "starArk", "ironWall", "ironWave", "ironRampage", "suppression", "odinSpear",
+  "defend", "deflect", "iceShield", "waterWave", "plateArmorDefense", "starGuard", "starArk", "ironWave", "ironRampage", "suppression", "odinSpear",
 ]);
 export const CARD_POOL_STAR_EFFECTS = new Set<CardEffect>([
   "battlePlan", "rulerCompass", "starlight", "starGuard", "starArk", "superStrategist", "flood", "aries", "astronomyResearch", "necromancyResearch", "elimination", "nebula",
@@ -270,7 +270,7 @@ type DefenseCardLike = Pick<CardBlueprint, "effect" | "damageType">;
 
 export function cardGivesPhysicalDefense(card: DefenseCardLike) {
   if (card.effect === "defend") return card.damageType === "physical";
-  return ["deflect", "starGuard", "plateArmorDefense", "ironWall", "ironWave", "ironRampage", "suppression", "starArk", "odinSpear"].includes(card.effect);
+  return ["deflect", "starGuard", "plateArmorDefense", "ironWave", "ironRampage", "suppression", "starArk", "odinSpear"].includes(card.effect);
 }
 
 export function cardGivesMagicDefense(card: DefenseCardLike) {

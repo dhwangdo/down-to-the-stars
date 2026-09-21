@@ -1,7 +1,5 @@
 import type { CardBlueprint, CardEffect } from "./cards";
 
-const IRON_WALL_BASE_DEFENSE = 5;
-
 export type DefenseGainOptions = {
   agility?: number;
   baseValue?: number;
@@ -14,7 +12,6 @@ const FIXED_DEFENSE_VALUES: Partial<Record<CardEffect, number>> = {
   waterWave: 5,
   ironRampage: 8,
   starArk: 10,
-  ironWall: IRON_WALL_BASE_DEFENSE,
   odinSpear: 15,
 };
 

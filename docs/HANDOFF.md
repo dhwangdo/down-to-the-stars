@@ -6,7 +6,7 @@
 
 ## 한 줄 요약
 
-**Down to the Stars(DTTS)**는 여러 파일에 쌓인 카드를 솔리테어처럼 재배열하며 싸우고, 넓은 그리드 지도에서 움직이는 적을 피해 탐험하는 싱글 플레이 웹게임 프로토타입이다.
+**Ruinfall**은 여러 파일에 쌓인 카드를 솔리테어처럼 재배열하며 싸우고, 넓은 그리드 지도에서 움직이는 적을 피해 탐험하는 싱글 플레이 웹게임 프로토타입이다.
 
 현재 지도 틀은 7지역까지 생성되며, 실제 적 풀과 고정 보스 콘텐츠는 **1~3지역까지** 구현되어 있다. 카드 전투, 재련, 룰 카드, 전설 카드 정의, 덱 케이스와 에디션, 보상, 상점, 축복, 성소, 여러 티켓, 보스 진행, 전투 텔레메트리가 한 브라우저 안에서 동작한다.
 
@@ -153,8 +153,8 @@ $env:GITHUB_ACTIONS='true'; npm run build:pages
 
 ## 주소
 
-- 저장소: https://github.com/dhwangdo/down-to-the-stars
-- 공개 게임: https://dhwangdo.github.io/down-to-the-stars/
+- 저장소: https://github.com/dhwangdo/ruinfall
+- 공개 게임: https://dhwangdo.github.io/ruinfall/
 
 - `main`에 push하면 GitHub Pages 배포를 시도한다.
 - GitHub Actions가 runner `startup_failure`로 시작하지 못한 사례가 있으므로, 배포 실패 시 로컬 코드 실패와 GitHub 인프라 실패를 구분한다.

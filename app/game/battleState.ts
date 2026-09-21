@@ -22,7 +22,7 @@ export type GameState = {
   pendingDraws: number;
   /** A one-time chosen-file draw. */
   pendingPileDrawCount: number;
-  /** 질주: 원하는 파일 1장 뒤에 자동으로 뽑을 무작위 파일 수. */
+  /** 질주가 사용한 무작위 파일 드로우 수. */
   pendingDashRandomDraws: number;
   /** 광행시간: 다음 플레이어 턴 시작 시 생성할 광채 수. */
   pendingRadiance: number;

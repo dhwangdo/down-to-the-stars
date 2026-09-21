@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import type { NextConfig } from "next";
 
-const repositoryName = "down-to-the-stars";
+const repositoryName = "ruinfall";
 const isGitHubPages = process.env.GITHUB_ACTIONS === "true";
 
 function readGitValue(args: string[], fallback: string) {
