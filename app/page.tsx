@@ -1940,6 +1940,7 @@ export default function Home() {
   const [deckPreviewSuppressed, setDeckPreviewSuppressed] = useState(false);
   const deckDropChanceRef = useRef(0.25);
   const rareCardDropChanceRef = useRef(0.05);
+  const [saveReady, setSaveReady] = useState(false);
   const [resetHoldProgress, setResetHoldProgress] = useState(0);
   const resetHoldStartedAtRef = useRef<number | null>(null);
   const resetHoldTimerRef = useRef<number | null>(null);
@@ -3939,8 +3940,9 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const saved = readRunSave<SavedRunState>();
-    if (saved) {
+    const timer = window.setTimeout(() => {
+      const saved = readRunSave<SavedRunState>();
+      if (saved) {
       const state = saved.state;
       setPlayerName(state.playerName);
       setPlayerNameSetupOpen(false);
@@ -4007,7 +4009,10 @@ export default function Home() {
       setGame(waitingState());
       setPhase("drawing");
         setScreen("map");
-    }
+      }
+      setSaveReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -4057,7 +4062,7 @@ export default function Home() {
       rareCardDropChance: rareCardDropChanceRef.current,
       deckPityBattlesRemaining: deckPityBattlesRemainingRef.current,
     };
-    saveAllowedRef.current = !playerNameSetupOpen && screen === "map" && !mapTraveling && !deckEditorOpen;
+    saveAllowedRef.current = saveReady && !playerNameSetupOpen && screen === "map" && !mapTraveling && !deckEditorOpen;
     saveDirtyRef.current = true;
   }, [
     activeDeckId, blessingRerollCost, blessings,
@@ -4069,7 +4074,7 @@ export default function Home() {
     mapBombs, mapEnemyCellMemory, mapEnemyWorld, mapPosition, mapSeed, mapTraveling,
     darkTicketTurnsRemaining, godsLamentCharges, mindEyeMovesRemaining, ownedDecks, playerName, playerNameSetupOpen, rockBombHits,
     blessingOffers, blessingSeenOfferIds, roomConsumableDrops, roomDeckDrops, roomDrops, roomShops, runPlayerHp,
-    oneUpUsed, safeAreaEntrySeenRooms, screen, seenRooms, usedBlessingRooms, usedHealRooms,
+    oneUpUsed, safeAreaEntrySeenRooms, saveReady, screen, seenRooms, usedBlessingRooms, usedHealRooms,
   ]);
 
   const saveRunNow = (force = false) => {
@@ -7898,7 +7903,12 @@ export default function Home() {
             <i style={{ width: `${resetHoldProgress * 100}%` }} />
           </div>
         )}
-        {playerNameSetupOpen && (
+        {!saveReady && (
+          <div className="player-name-overlay save-loading-overlay" role="status" aria-live="polite">
+            <div className="save-loading-dialog">탐험을 불러오는 중...</div>
+          </div>
+        )}
+        {saveReady && playerNameSetupOpen && (
           <div className="player-name-overlay" role="dialog" aria-modal="true" aria-labelledby="player-name-title">
             <form
               className="player-name-dialog"
