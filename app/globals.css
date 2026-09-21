@@ -3834,15 +3834,6 @@ h1 { margin: 0; font-size: 25px; font-weight: 600; }
   background: rgba(0, 0, 0, .74);
 }
 
-.save-loading-dialog {
-  padding: 18px 24px;
-  border: 1px solid rgba(255,255,255,.28);
-  border-radius: 8px;
-  color: #f5f7f4;
-  background: rgba(10, 16, 13, .88);
-  box-shadow: 0 12px 42px rgba(0,0,0,.42);
-}
-
 .battle-deck-check-overlay {
   position: fixed;
   z-index: 150;

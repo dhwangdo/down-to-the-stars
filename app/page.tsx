@@ -259,6 +259,8 @@ type SavedRunState = {
   roomConsumableDrops: Record<string, Consumable[]>;
   roomDeckDrops: Record<string, DeckCase[]>;
   roomShops: Record<string, ShopOffer[]>;
+  blessingOffers?: BlessingOfferId[];
+  blessingSeenOfferIds?: BlessingId[];
   blessings: BlessingId[];
   blessingRerollCost: number;
   oneUpUsed: boolean;
@@ -1938,13 +1940,13 @@ export default function Home() {
   const [deckPreviewSuppressed, setDeckPreviewSuppressed] = useState(false);
   const deckDropChanceRef = useRef(0.25);
   const rareCardDropChanceRef = useRef(0.05);
-  const [saveReady, setSaveReady] = useState(false);
   const [resetHoldProgress, setResetHoldProgress] = useState(0);
   const resetHoldStartedAtRef = useRef<number | null>(null);
   const resetHoldTimerRef = useRef<number | null>(null);
   const latestSaveStateRef = useRef<SavedRunState | null>(null);
   const saveDirtyRef = useRef(false);
   const saveAllowedRef = useRef(false);
+  const queuedSaveTimerRef = useRef<number | null>(null);
   const activeDeck = ownedDecks.find((deck) => deck.id === activeDeckId) ?? ownedDecks[0];
   const shrineDeck = ownedDecks.find((deck) => deck.id === shrineDeckId) ?? activeDeck;
   const consumableDescription = (consumable: Consumable) => consumable.type === "mapTicket" && blessings.includes("cartographer")
@@ -2370,6 +2372,7 @@ export default function Home() {
     setActiveShopRoom(roomKey);
     setShopMessage("필요한 물건을 골라보세요.");
     setShopOpen(true);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const buyShopOffer = (offerId: string) => {
@@ -2400,6 +2403,7 @@ export default function Home() {
         item.id === offerId ? { ...item, sold: true } : item),
     }));
     setShopMessage(`${offer.card?.name ?? offer.consumable?.name}을(를) 구매했습니다.${inventoryFull ? " 인벤토리가 가득 차 바닥에 놓았습니다." : ""}`);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const openCardPack = (packId: string) => {
@@ -2634,10 +2638,13 @@ export default function Home() {
       const nonEmptyPileIndexes = drawPiles
         .map((pile, index) => pile.length > 0 ? index : -1)
         .filter((index) => index >= 0);
+      const discardPileCandidates = nonEmptyPileIndexes.length > 0
+        ? nonEmptyPileIndexes
+        : drawPiles.map((_, index) => index);
       const enemiesAfterDiscardTargeting = current.enemies.map((enemy) => {
         const intent = enemy.actions[enemy.intentIndex];
         return intent.discardCount
-          ? { ...enemy, discardPileIndex: nonEmptyPileIndexes.length > 0 ? pickRandom(nonEmptyPileIndexes) : undefined }
+          ? { ...enemy, discardPileIndex: discardPileCandidates.length > 0 ? pickRandom(discardPileCandidates) : undefined }
           : { ...enemy, discardPileIndex: undefined };
       });
       const toxicSlimeSources = current.enemies.flatMap((enemy) => enemy.givesToxicSlime
@@ -3085,6 +3092,7 @@ export default function Home() {
       setBlessingSeenOfferIds(new Set(next.filter((id): id is BlessingId => id !== "empty")));
     }
     setBlessingOpen(true);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
   const chooseBlessing = (blessing: BlessingOfferId) => {
     if (!blessingOffers.includes(blessing)) return;
@@ -3101,6 +3109,7 @@ export default function Home() {
     setBlessingOffers([]);
     setBlessingSeenOfferIds(new Set());
     setBlessingOpen(false);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
   const rerollBlessings = () => {
     if (runPlayerHpRef.current < blessingRerollCost) return;
@@ -3131,6 +3140,7 @@ export default function Home() {
       ...current,
       ...nextOffers.filter((id): id is BlessingId => id !== "empty"),
     ]));
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
   const consumeMindEyeMove = () => {
     setMindEyeMovesRemaining((current) => {
@@ -3593,6 +3603,7 @@ export default function Home() {
     setShrinePendingCardIds([]);
     setShrineDropActive(false);
     setShrineResult({ cards: selectedCards });
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const animateMapCollision = (
@@ -3813,10 +3824,14 @@ export default function Home() {
     setActiveBattleRoom(null);
     mapBattleQueueRef.current = [];
     setScreen("map");
-    queueRunSave(500);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const startNewRun = () => {
+    if (queuedSaveTimerRef.current !== null) {
+      window.clearTimeout(queuedSaveTimerRef.current);
+      queuedSaveTimerRef.current = null;
+    }
     clearBattleTimers();
     clearMapTravel();
     resetTelemetryRecorder(telemetry);
@@ -3924,9 +3939,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const saved = readRunSave<SavedRunState>();
-      if (saved) {
+    const saved = readRunSave<SavedRunState>();
+    if (saved) {
       const state = saved.state;
       setPlayerName(state.playerName);
       setPlayerNameSetupOpen(false);
@@ -3977,6 +3991,8 @@ export default function Home() {
       setRoomConsumableDrops(state.roomConsumableDrops);
       setRoomDeckDrops(savedRoomDeckDrops);
       setRoomShops(state.roomShops);
+      setBlessingOffers(state.blessingOffers ?? []);
+      setBlessingSeenOfferIds(new Set(state.blessingSeenOfferIds ?? []));
       setBlessings(state.blessings.filter((id) => (id as string) !== "luck"));
       const savedBlessingRerollCost = Math.max(5, Number(state.blessingRerollCost) || 5);
       setBlessingRerollCost(5 + 2 * Math.ceil((savedBlessingRerollCost - 5) / 2));
@@ -3991,10 +4007,7 @@ export default function Home() {
       setGame(waitingState());
       setPhase("drawing");
         setScreen("map");
-      }
-      setSaveReady(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
+    }
   }, []);
 
   useEffect(() => {
@@ -4032,6 +4045,8 @@ export default function Home() {
       roomConsumableDrops,
       roomDeckDrops,
       roomShops,
+      blessingOffers,
+      blessingSeenOfferIds: [...blessingSeenOfferIds],
       blessings,
       blessingRerollCost,
       oneUpUsed,
@@ -4042,7 +4057,7 @@ export default function Home() {
       rareCardDropChance: rareCardDropChanceRef.current,
       deckPityBattlesRemaining: deckPityBattlesRemainingRef.current,
     };
-    saveAllowedRef.current = saveReady && !playerNameSetupOpen && screen === "map" && !mapTraveling && !deckEditorOpen;
+    saveAllowedRef.current = !playerNameSetupOpen && screen === "map" && !mapTraveling && !deckEditorOpen;
     saveDirtyRef.current = true;
   }, [
     activeDeckId, blessingRerollCost, blessings,
@@ -4053,8 +4068,8 @@ export default function Home() {
     destroyedShopRooms, gold, inventoryCards, inventoryConsumables, vitalityShrineMaxHpBonus,
     mapBombs, mapEnemyCellMemory, mapEnemyWorld, mapPosition, mapSeed, mapTraveling,
     darkTicketTurnsRemaining, godsLamentCharges, mindEyeMovesRemaining, ownedDecks, playerName, playerNameSetupOpen, rockBombHits,
-    roomConsumableDrops, roomDeckDrops, roomDrops, roomShops, runPlayerHp,
-    oneUpUsed, safeAreaEntrySeenRooms, saveReady, screen, seenRooms, usedBlessingRooms, usedHealRooms,
+    blessingOffers, blessingSeenOfferIds, roomConsumableDrops, roomDeckDrops, roomDrops, roomShops, runPlayerHp,
+    oneUpUsed, safeAreaEntrySeenRooms, screen, seenRooms, usedBlessingRooms, usedHealRooms,
   ]);
 
   const saveRunNow = (force = false) => {
@@ -4064,8 +4079,14 @@ export default function Home() {
     return true;
   };
 
-  const queueRunSave = (delay = 300) => {
-    window.setTimeout(saveRunNow, delay);
+  const queueRunSave = (delay = RUN_SAVE_POLICY.stateChangeDelayMs) => {
+    if (queuedSaveTimerRef.current !== null) {
+      window.clearTimeout(queuedSaveTimerRef.current);
+    }
+    queuedSaveTimerRef.current = window.setTimeout(() => {
+      queuedSaveTimerRef.current = null;
+      saveRunNow();
+    }, delay);
   };
 
   useEffect(() => {
@@ -4596,14 +4617,15 @@ export default function Home() {
       runPlayerHpRef.current = nextHp;
       setRunPlayerHp(nextHp);
     }
-    if (preserved) return true;
-    const nextInventory = [...consumed.inventory];
-    inventoryConsumablesRef.current = nextInventory;
-    setInventoryConsumables(nextInventory);
-    setRoomConsumableDrops((current) => ({
-      ...current,
-      [roomKey]: (current[roomKey] ?? []).filter((item) => item.id !== ticketId),
-    }));
+    if (!preserved) {
+      const nextInventory = [...consumed.inventory];
+      inventoryConsumablesRef.current = nextInventory;
+      setInventoryConsumables(nextInventory);
+      setRoomConsumableDrops((current) => ({
+        ...current,
+        [roomKey]: (current[roomKey] ?? []).filter((item) => item.id !== ticketId),
+      }));
+    }
     return true;
   };
 
@@ -4717,6 +4739,7 @@ export default function Home() {
     closeDeckEditorAfterMapTicket();
     activateMindEye();
     showMapMessage("심안: 20번 이동 동안 시야 거리 +2를 얻었습니다.");
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const consumeDarkTicket = (consumableId: string) => {
@@ -4944,6 +4967,7 @@ export default function Home() {
         return "축복";
       });
       setDeckEditorMessage(`${revealedNames.join(", ")} ${revealed.length}곳의 위치를 밝혔습니다.`);
+      queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
       return;
     }
   };
@@ -5122,6 +5146,7 @@ export default function Home() {
     setTransformedCardNewIds((current) => new Set(current).add(targetCard.id));
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${targetCard.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const transformConsumableWithTicket = (targetId: string) => {
@@ -5144,6 +5169,7 @@ export default function Home() {
     }));
     setPendingTransformTicketId(null);
     setDeckEditorMessage(`${target.name}을(를) ${transformed.name}(으)로 변환했습니다.`);
+    queueRunSave(RUN_SAVE_POLICY.stateChangeDelayMs);
   };
 
   const moveDeckCardBetweenDecks = (cardId: number, sourceDeckId: string, targetDeckId: string) => {
@@ -7872,12 +7898,7 @@ export default function Home() {
             <i style={{ width: `${resetHoldProgress * 100}%` }} />
           </div>
         )}
-        {!saveReady && (
-          <div className="player-name-overlay save-loading-overlay" role="status" aria-live="polite">
-            <div className="save-loading-dialog">탐험을 불러오는 중...</div>
-          </div>
-        )}
-        {saveReady && playerNameSetupOpen && (
+        {playerNameSetupOpen && (
           <div className="player-name-overlay" role="dialog" aria-modal="true" aria-labelledby="player-name-title">
             <form
               className="player-name-dialog"

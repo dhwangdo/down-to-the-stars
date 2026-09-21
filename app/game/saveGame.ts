@@ -4,6 +4,7 @@ export const RUN_SAVE_VERSION = 1;
 export const RUN_SAVE_POLICY = {
   afterEveryMapMove: true,
   mapMoveDelayMs: 50,
+  stateChangeDelayMs: 50,
   roamingIntervalMs: 60_000,
 } as const;
 
