@@ -121,8 +121,8 @@ import {
   SAFE_AREA_LAYOUT_MAX_OFFSET_X,
   SAFE_AREA_LAYOUT_MIN_OFFSET_X,
   buildKnownRoomRoutes,
-  createPreGeneratedMapEnemyWorld,
-  createPreGeneratedMapFloorDrops,
+  createMapEnemyWorldForPositions,
+  createMapFloorDropsForPositions,
   findKnownRoomRoute,
   getDungeonRegionIndex,
   getRegionNumber,
@@ -1824,6 +1824,7 @@ export default function Home() {
   const [roomConsumableDrops, setRoomConsumableDrops] = useState<Record<string, Consumable[]>>({});
   const [roomDeckDrops, setRoomDeckDrops] = useState<Record<string, DeckCase[]>>({});
   const [roomShops, setRoomShops] = useState<Record<string, ShopOffer[]>>({});
+  const generatedMapRoomKeysRef = useRef<Set<string>>(new Set([mapRoomKey(MAP_START)]));
 
   useEffect(() => {
     if (debugMode && screen === "battle") {
@@ -2739,6 +2740,64 @@ export default function Home() {
     setMapCameraFocusing(false);
   };
 
+  const materializeMapContent = (
+    positions: readonly MapPosition[],
+    seed = mapSeed,
+    world: MapEnemyWorld = mapEnemyWorld,
+  ) => {
+    const uniquePositions = [...new Map(positions.map((position) => [mapRoomKey(position), position])).values()];
+    const freshPositions = uniquePositions.filter((position) => !generatedMapRoomKeysRef.current.has(mapRoomKey(position)));
+    if (freshPositions.length === 0) return world;
+
+    const freshRoomKeys = freshPositions.map(mapRoomKey);
+    freshRoomKeys.forEach((roomKey) => generatedMapRoomKeysRef.current.add(roomKey));
+    const generatedEnemies = createMapEnemyWorldForPositions(seed, freshPositions);
+    const existingEnemyIds = new Set(world.enemies.map((enemy) => enemy.id));
+    const nextWorld = {
+      ...world,
+      enemies: [
+        ...world.enemies,
+        ...generatedEnemies.enemies.filter((enemy) => !existingEnemyIds.has(enemy.id)),
+      ],
+    };
+    const floorDrops = createMapFloorDropsForPositions(seed, freshPositions);
+    if (Object.keys(floorDrops.cards).length > 0) {
+      setRoomDrops((current) => {
+        const next = { ...current };
+        Object.entries(floorDrops.cards).forEach(([roomKey, cards]) => {
+          next[roomKey] = [...(next[roomKey] ?? []), ...cards];
+        });
+        return next;
+      });
+    }
+    if (Object.keys(floorDrops.consumables).length > 0) {
+      setRoomConsumableDrops((current) => {
+        const next = { ...current };
+        Object.entries(floorDrops.consumables).forEach(([roomKey, consumables]) => {
+          next[roomKey] = [...(next[roomKey] ?? []), ...consumables];
+        });
+        return next;
+      });
+    }
+    setSeenRooms((current) => new Set([...current, ...freshRoomKeys]));
+    return nextWorld;
+  };
+
+  const materializeVisibleMapContent = (
+    position: MapPosition,
+    seed = mapSeed,
+    world: MapEnemyWorld = mapEnemyWorld,
+    horizontalRadius = visionHorizontalRadius,
+    verticalRadius = visionVerticalRadius,
+  ) => {
+    const visibleKeys = visibleMapRoomKeys(position, seed, horizontalRadius, verticalRadius);
+    return materializeMapContent(
+      [...visibleKeys].map(parseMapRoomKey),
+      seed,
+      world,
+    );
+  };
+
   const rememberPlayerVision = (
     position: MapPosition,
     seed = mapSeed,
@@ -2928,13 +2987,17 @@ export default function Home() {
   useEffect(() => {
     const seedTimer = window.setTimeout(() => {
       const nextSeed = createRandomMapSeed();
+      const initialVisibleKeys = visibleMapRoomKeys(MAP_START, nextSeed);
+      generatedMapRoomKeysRef.current = new Set();
+      const initialWorld = materializeMapContent(
+        [...initialVisibleKeys].map(parseMapRoomKey),
+        nextSeed,
+        { enemies: [] },
+      );
       setMapSeed(nextSeed);
-      setMapEnemyWorld(createPreGeneratedMapEnemyWorld(nextSeed));
+      setMapEnemyWorld(initialWorld);
       setMapEnemyCellMemory({});
-      const floorDrops = createPreGeneratedMapFloorDrops(nextSeed);
-      setRoomDrops(floorDrops.cards);
-      setRoomConsumableDrops(floorDrops.consumables);
-      setSeenRooms(visibleMapRoomKeys(MAP_START, nextSeed));
+      setSeenRooms(initialVisibleKeys);
     }, 0);
     return () => {
       window.clearTimeout(seedTimer);
@@ -3051,11 +3114,12 @@ export default function Home() {
     if (blessing === "vision" || blessing === "bioluminescence") {
       const allOwned = new Set([...blessings, ...acquiredTogether, blessing]);
       const bonus = (allOwned.has("vision") ? 1 : 0) + (allOwned.has("bioluminescence") ? 2 : 0);
-      setSeenRooms((current) => new Set([...current, ...visibleMapRoomKeys(
+      const revealedWorld = materializeMapContent([...visibleMapRoomKeys(
         mapPosition, mapSeed,
         MAP_PLAYER_VISION_HORIZONTAL_RADIUS + bonus,
         MAP_PLAYER_VISION_VERTICAL_RADIUS + bonus,
-      )]));
+      )].map(parseMapRoomKey), mapSeed, mapEnemyWorld);
+      setMapEnemyWorld(revealedWorld);
     }
     if (blessing === "deckSize") setOwnedDecks((current) => current.map((deck) => ({ ...deck, capacity: deck.capacity + 5 })));
     if (blessing === "oparts") {
@@ -3262,12 +3326,13 @@ export default function Home() {
       const regionIndex = getDungeonRegionIndex(mapPosition);
       if (regionIndex === null) return;
       const destination = safeAreaEntry(regionIndex, mapSeed);
-      const nextWorld = clearMapEnemiesNear(mapEnemyWorld, destination);
+      const revealedWorld = materializeVisibleMapContent(destination, mapSeed, mapEnemyWorld);
+      const nextWorld = clearMapEnemiesNear(revealedWorld, destination);
       setSafeAreaEntrySeenRooms(new Set(seenRooms));
       godsLamentChargesRef.current = 0;
       setGodsLamentCharges(0);
       setMapPosition(destination);
-      rememberPlayerVision(destination, mapSeed, nextWorld.enemies, mapEnemyWorld.enemies);
+      rememberPlayerVision(destination, mapSeed, nextWorld.enemies, revealedWorld.enemies);
       setMapEnemyWorld(nextWorld);
       focusMapOn(destination);
       return;
@@ -3277,13 +3342,14 @@ export default function Home() {
     if (regionIndex === null) return;
     if (regionIndex >= REGION_COUNT - 1) return;
     const destination = nextRegionEntry(regionIndex);
-    const nextWorld = clearMapEnemiesNear(mapEnemyWorld, destination);
+    const revealedWorld = materializeVisibleMapContent(destination, mapSeed, mapEnemyWorld);
+    const nextWorld = clearMapEnemiesNear(revealedWorld, destination);
     const discardSafeAreaMemory = safeAreaEntrySeenRooms !== null && isSafeAreaSealed(regionIndex);
     const baseSeenRooms = discardSafeAreaMemory ? safeAreaEntrySeenRooms : null;
     godsLamentChargesRef.current = 3;
     setGodsLamentCharges(3);
     setMapPosition(destination);
-    rememberPlayerVision(destination, mapSeed, nextWorld.enemies, mapEnemyWorld.enemies, baseSeenRooms);
+    rememberPlayerVision(destination, mapSeed, nextWorld.enemies, revealedWorld.enemies, baseSeenRooms);
     setSafeAreaEntrySeenRooms(null);
     setMapEnemyWorld(nextWorld);
     focusMapOn(destination);
@@ -3387,11 +3453,12 @@ export default function Home() {
       mindEyeMovesRemainingRef.current = next;
       return next;
     });
-    setSeenRooms((current) => new Set([...current, ...visibleMapRoomKeys(
+    const revealedWorld = materializeMapContent([...visibleMapRoomKeys(
       mapPosition, mapSeed,
       MAP_PLAYER_VISION_HORIZONTAL_RADIUS + blessingVisionBonus + 2,
       MAP_PLAYER_VISION_VERTICAL_RADIUS + blessingVisionBonus + 2,
-    )]));
+    )].map(parseMapRoomKey), mapSeed, mapEnemyWorld);
+    setMapEnemyWorld(revealedWorld);
   };
 
   const useCurrentMindEyeShrine = () => {
@@ -3633,13 +3700,14 @@ export default function Home() {
     };
     if (!isWalkableRoom(effectiveRoomType(nextPosition))) return;
     const roomKey = mapRoomKey(nextPosition);
-    const result = resolveMapStep(mapPosition, nextPosition, mapEnemyWorld);
+    const revealedWorld = materializeVisibleMapContent(nextPosition, mapSeed, mapEnemyWorld);
+    const result = resolveMapStep(mapPosition, nextPosition, revealedWorld);
     const bombResult = advanceBombsAfterMovement(nextPosition, result.world);
     const bombWorld = bombResult.world;
     const collisionIds = new Set(result.collisionEnemies.map((enemy) => enemy.id));
     const collisionEnemies = bombWorld.enemies.filter((enemy) => collisionIds.has(enemy.id));
     setMapPosition(nextPosition);
-    rememberPlayerVision(nextPosition, mapSeed, bombWorld.enemies, mapEnemyWorld.enemies);
+    rememberPlayerVision(nextPosition, mapSeed, bombWorld.enemies, revealedWorld.enemies);
     consumeMindEyeMove();
     setMapEnemyWorld(bombWorld);
     if (RUN_SAVE_POLICY.afterEveryMapMove) queueRunSave(RUN_SAVE_POLICY.mapMoveDelayMs);
@@ -3654,11 +3722,12 @@ export default function Home() {
   const spendMapTurn = () => {
     if (screen !== "map" || mapTraveling) return;
     const roomKey = mapRoomKey(mapPosition);
-    const result = resolveMapStep(mapPosition, mapPosition, mapEnemyWorld);
+    const revealedWorld = materializeVisibleMapContent(mapPosition, mapSeed, mapEnemyWorld);
+    const result = resolveMapStep(mapPosition, mapPosition, revealedWorld);
     const bombResult = advanceBombsAfterMovement(mapPosition, result.world);
     const collisionIds = new Set(result.collisionEnemies.map((enemy) => enemy.id));
     const collisionEnemies = bombResult.world.enemies.filter((enemy) => collisionIds.has(enemy.id));
-    rememberPlayerVision(mapPosition, mapSeed, bombResult.world.enemies, mapEnemyWorld.enemies);
+    rememberPlayerVision(mapPosition, mapSeed, bombResult.world.enemies, revealedWorld.enemies);
     setMapEnemyWorld(bombResult.world);
     if (bombResult.playerDefeated) return;
     if (collisionEnemies.length > 0) {
@@ -3676,8 +3745,10 @@ export default function Home() {
     if (debugMode) {
       const destination = path.at(-1)!;
       clearMapTravel();
+      const revealedWorld = materializeVisibleMapContent(destination, mapSeed, mapEnemyWorld);
       setMapPosition(destination);
-      rememberPlayerVision(destination);
+      setMapEnemyWorld(revealedWorld);
+      rememberPlayerVision(destination, mapSeed, revealedWorld.enemies, mapEnemyWorld.enemies);
       focusMapOn(destination);
       activateRoomFeature(destination);
       return;
@@ -3704,7 +3775,8 @@ export default function Home() {
       const nextPosition = path[stepIndex];
       const roomKey = mapRoomKey(nextPosition);
       const previousWorld = currentWorld;
-      const result = resolveMapStep(currentPosition, nextPosition, currentWorld);
+      const revealedWorld = materializeVisibleMapContent(nextPosition, mapSeed, currentWorld);
+      const result = resolveMapStep(currentPosition, nextPosition, revealedWorld);
       const bombResult = advanceBombsAfterMovement(nextPosition, result.world);
       const bombWorld = bombResult.world;
       const collisionIds = new Set(result.collisionEnemies.map((enemy) => enemy.id));
@@ -3853,9 +3925,18 @@ export default function Home() {
     godsLamentChargesRef.current = 3;
     setDarkTicketTurnsRemaining(0);
     darkTicketTurnsRemainingRef.current = 0;
-    setSeenRooms(visibleMapRoomKeys(MAP_START, nextSeed));
+    const initialVisibleKeys = visibleMapRoomKeys(MAP_START, nextSeed);
+    generatedMapRoomKeysRef.current = new Set();
+    setRoomDrops({});
+    setRoomConsumableDrops({});
+    const initialWorld = materializeMapContent(
+      [...initialVisibleKeys].map(parseMapRoomKey),
+      nextSeed,
+      { enemies: [] },
+    );
+    setSeenRooms(initialVisibleKeys);
     setSafeAreaEntrySeenRooms(null);
-    setMapEnemyWorld(createPreGeneratedMapEnemyWorld(nextSeed));
+    setMapEnemyWorld(initialWorld);
     setDefeatedBossRegions(new Set());
     setMapEnemyCellMemory({});
     setMapBombsSynced([]);
@@ -3901,9 +3982,6 @@ export default function Home() {
     setInventoryCards([]);
     nextConsumableIdRef.current = 1;
     setInventoryConsumables([nextConsumable("extractTicket")]);
-    const floorDrops = createPreGeneratedMapFloorDrops(nextSeed);
-    setRoomDrops(floorDrops.cards);
-    setRoomConsumableDrops(floorDrops.consumables);
     setRoomDeckDrops({});
     setRoomShops({});
     setShopOpen(false);
@@ -3951,6 +4029,11 @@ export default function Home() {
       setMapSeed(state.mapSeed);
       setMapPosition(state.mapPosition);
       setSeenRooms(new Set(state.seenRooms));
+      generatedMapRoomKeysRef.current = new Set([
+        ...state.seenRooms,
+        ...Object.keys(state.roomDrops),
+        ...Object.keys(state.roomConsumableDrops),
+      ]);
       setSafeAreaEntrySeenRooms(state.safeAreaEntrySeenRooms ? new Set(state.safeAreaEntrySeenRooms) : null);
       setMapEnemyWorld(state.mapEnemyWorld);
       setDefeatedBossRegions(new Set(state.defeatedBossRegions));
@@ -4958,7 +5041,8 @@ export default function Home() {
       const mapTicket = findTicketById(consumable.id, "mapTicket");
       if (!mapTicket || !consumeTicketById(mapTicket.id, "mapTicket")) return;
       closeDeckEditorAfterMapTicket();
-      setSeenRooms((current) => new Set([...current, ...revealed.map((position) => mapRoomKey(position))]));
+      const revealedWorld = materializeMapContent(revealed, mapSeed, mapEnemyWorld);
+      setMapEnemyWorld(revealedWorld);
       startMapTicketCameraTour(mapPosition, revealed);
       const revealedNames = revealed.map((position) => {
         const type = effectiveRoomType(position);
@@ -8289,7 +8373,9 @@ export default function Home() {
                           return;
                         }
                         setMapPosition(position);
-                        rememberPlayerVision(position);
+                        const revealedWorld = materializeVisibleMapContent(position, mapSeed, mapEnemyWorld);
+                        setMapEnemyWorld(revealedWorld);
+                        rememberPlayerVision(position, mapSeed, revealedWorld.enemies, mapEnemyWorld.enemies);
                         focusMapOn(position);
                         activateRoomFeature(position);
                         return;

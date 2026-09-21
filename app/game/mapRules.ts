@@ -274,83 +274,27 @@ function getFixedRoomType(position: MapPosition, seed: number): RoomType | null 
   return "void";
 }
 
-function chooseSoftDistributedPositions(
-  candidates: readonly MapPosition[],
-  count: number,
-  seed: number,
-  salt: number,
-  repellers: readonly MapPosition[] = [],
-) {
-  const pool = [...candidates];
-  const selected: MapPosition[] = [];
-  while (selected.length < count && pool.length > 0) {
-    const occupied = [...repellers, ...selected];
-    const weighted = pool.map((position) => {
-      const influence = occupied.reduce((total, other) => {
-        const distance = chebyshevDistance(position, other);
-        if (distance <= 0 || distance > 8) return total;
-        return total + 2 ** (-(distance - 1));
-      }, 0);
-      return {
-        position,
-        weight: 1 / (1 + 1.5 * influence),
-      };
-    });
-    const totalWeight = weighted.reduce((total, entry) => total + entry.weight, 0);
-    let cursor = seededRoll({ x: selected.length, y: count }, seed, salt + selected.length) * totalWeight;
-    let chosenIndex = weighted.length - 1;
-    for (let index = 0; index < weighted.length; index += 1) {
-      cursor -= weighted[index].weight;
-      if (cursor <= 0) {
-        chosenIndex = index;
-        break;
-      }
-    }
-    selected.push(pool[chosenIndex]);
-    pool.splice(chosenIndex, 1);
-  }
-  return selected;
-}
+function getSpecialRoomType(position: MapPosition, seed: number): RoomType | null {
+  if (getFixedRoomType(position, seed) !== null) return null;
+  const regionIndex = getDungeonRegionIndex(position);
+  if (regionIndex === null) return null;
+  const localY = position.y - regionStartY(regionIndex);
+  const availableChance = localY === regionHeight(regionIndex) - 1
+    ? 1 - PORTAL_NODE_CHANCE
+    : 1;
+  if (seededRoll(position, seed, 7300) >= SPECIAL_NODE_CHANCE / availableChance) return null;
 
-const specialNodeLayoutCache = new Map<number, Map<string, RoomType>>();
-
-function getSpecialNodeLayout(seed: number) {
-  const cached = specialNodeLayoutCache.get(seed);
-  if (cached) return cached;
-
-  const eligiblePositions: MapPosition[] = [];
-  let baselineSpecialCount = 0;
-  for (let y = 0; y < MAP_ROWS; y += 1) {
-    for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
-      const position = { x, y };
-      if (getFixedRoomType(position, seed) !== null) continue;
-      eligiblePositions.push(position);
-      const regionIndex = getDungeonRegionIndex(position)!;
-      const localY = position.y - regionStartY(regionIndex);
-      const availableChance = localY === regionHeight(regionIndex) - 1
-        ? 1 - PORTAL_NODE_CHANCE
-        : 1;
-      if (seededRoll(position, seed) < SPECIAL_NODE_CHANCE / availableChance) baselineSpecialCount += 1;
+  const roll = seededRoll(position, seed, 7301);
+  let cumulative = 0;
+  let selectedType = SPECIAL_NODE_WEIGHTS.at(-1)!.type;
+  for (const entry of SPECIAL_NODE_WEIGHTS) {
+    cumulative += entry.weight / SPECIAL_NODE_WEIGHT_TOTAL;
+    if (roll < cumulative) {
+      selectedType = entry.type;
+      break;
     }
   }
-
-  const selected = chooseSoftDistributedPositions(eligiblePositions, baselineSpecialCount, seed, 7300);
-  const layout = new Map<string, RoomType>();
-  selected.forEach((position) => {
-    const roll = seededRoll(position, seed, 7301);
-    let cumulative = 0;
-    let selectedType = SPECIAL_NODE_WEIGHTS.at(-1)!.type;
-    for (const entry of SPECIAL_NODE_WEIGHTS) {
-      cumulative += entry.weight / SPECIAL_NODE_WEIGHT_TOTAL;
-      if (roll < cumulative) {
-        selectedType = entry.type;
-        break;
-      }
-    }
-    layout.set(mapRoomKey(position), selectedType);
-  });
-  specialNodeLayoutCache.set(seed, layout);
-  return layout;
+  return selectedType;
 }
 
 function isNormalDungeonFloor(position: MapPosition, seed: number) {
@@ -359,7 +303,7 @@ function isNormalDungeonFloor(position: MapPosition, seed: number) {
   const localY = position.y - regionStartY(regionIndex);
   if (localY === 0 && position.x === 0) return false;
   if (localY === regionHeight(regionIndex) - 1 && isPortalColumn(position.x, regionIndex, seed)) return false;
-  return !getSpecialNodeLayout(seed).has(mapRoomKey(position));
+  return getSpecialRoomType(position, seed) === null;
 }
 
 function isRockClusterCell(position: MapPosition, seed: number) {
@@ -396,7 +340,7 @@ function isRockClusterCell(position: MapPosition, seed: number) {
 export function getRoomType(position: MapPosition, seed: number): RoomType {
   const fixedType = getFixedRoomType(position, seed);
   if (fixedType !== null) return fixedType;
-  const specialType = getSpecialNodeLayout(seed).get(mapRoomKey(position));
+  const specialType = getSpecialRoomType(position, seed);
   if (specialType) return specialType;
   if (!isAdjacentToSafeAreaBoundary(position, seed) && isRockClusterCell(position, seed)) return "rock";
   return "empty";
@@ -464,14 +408,11 @@ export function isMapEnemySpawnCell(position: MapPosition, seed: number) {
     && getRoomType(position, seed) === "empty";
 }
 
-export function createPreGeneratedMapEnemyWorld(seed: number): MapEnemyWorld {
-  const spawnCells: MapPosition[] = [];
-  for (let y = 0; y < MAP_ROWS; y += 1) {
-    for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
-      const position = { x, y };
-      if (isMapEnemySpawnCell(position, seed)) spawnCells.push(position);
-    }
-  }
+export function createMapEnemyWorldForPositions(
+  seed: number,
+  positions: readonly MapPosition[],
+): MapEnemyWorld {
+  const spawnCells = positions.filter((position) => isMapEnemySpawnCell(position, seed));
   const world = createMapEnemyWorld(spawnCells, seed, SEWER_ENCOUNTER_COUNT);
   const bosses = Array.from({ length: BOSS_REGION_COUNT }, (_, regionIndex) => {
     const centerX = safeAreaCenterX(regionIndex, seed);
@@ -483,7 +424,7 @@ export function createPreGeneratedMapEnemyWorld(seed: number): MapEnemyWorld {
       awareness: "alerted" as const,
       isBoss: true,
     };
-  });
+  }).filter((boss) => positions.some((position) => mapRoomKey(position) === mapRoomKey(boss.position)));
   return {
     enemies: [
       ...world.enemies.map((enemy) => {
@@ -500,40 +441,36 @@ export function createPreGeneratedMapEnemyWorld(seed: number): MapEnemyWorld {
   };
 }
 
-export function createPreGeneratedMapFloorDrops(seed: number) {
-  const cards: Record<string, Card[]> = {};
-  const consumables: Record<string, Consumable[]> = {};
-  const specialPositions = Array.from(getSpecialNodeLayout(seed).keys()).map(parseMapRoomKey);
-  const emptyPositions: MapPosition[] = [];
-  const baselineDropCount = { value: 0 };
+export function createPreGeneratedMapEnemyWorld(seed: number): MapEnemyWorld {
+  const allPositions: MapPosition[] = [];
   for (let y = 0; y < MAP_ROWS; y += 1) {
     for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
-      const position = { x, y };
-      if (getRoomType(position, seed) !== "empty") continue;
-      emptyPositions.push(position);
-      if (seededRoll(position, seed, 7201) < FLOOR_CARD_DROP_CHANCE) baselineDropCount.value += 1;
+      allPositions.push({ x, y });
     }
   }
-  const dropPositions = chooseSoftDistributedPositions(
-    emptyPositions,
-    baselineDropCount.value,
-    seed,
-    7205,
-    specialPositions,
-  ).sort((left, right) => left.y - right.y || left.x - right.x);
-  let cardIndex = 0;
-  for (const position of dropPositions) {
+  return createMapEnemyWorldForPositions(seed, allPositions);
+}
+
+export function createMapFloorDropsForPositions(
+  seed: number,
+  positions: readonly MapPosition[],
+) {
+  const cards: Record<string, Card[]> = {};
+  const consumables: Record<string, Consumable[]> = {};
+  for (const position of positions) {
+    if (getRoomType(position, seed) !== "empty"
+      || seededRoll(position, seed, 7201) >= FLOOR_CARD_DROP_CHANCE) continue;
     const roomKey = mapRoomKey(position);
     if (seededRoll(position, seed, 7202) < FLOOR_CARD_ITEM_CHANCE) {
       const rarityRoll = seededRoll(position, seed, 7203);
       const pool = rarityRoll < FLOOR_CARD_RARITY_CHANCES.rare
         ? RARE_CARD_POOL
         : rarityRoll < FLOOR_CARD_RARITY_CHANCES.rare + FLOOR_CARD_RARITY_CHANCES.basic
-          ? BASIC_CARD_POOL
-          : SPECIAL_CARD_POOL.filter((card) => card.rarity === "special");
+        ? BASIC_CARD_POOL
+        : SPECIAL_CARD_POOL.filter((card) => card.rarity === "special");
       const blueprint = pool[Math.floor(seededRoll(position, seed, 7204) * pool.length)];
-      cards[roomKey] = [{ ...blueprint, id: 100_000 + cardIndex, revealed: false }];
-      cardIndex += 1;
+      const cellId = (position.y * MAP_COLUMNS) + (position.x - DUNGEON_MIN_X);
+      cards[roomKey] = [{ ...blueprint, id: 1_000_000 + cellId, revealed: false }];
     } else {
       const ticketRoll = seededRoll(position, seed, 7203);
       const type = consumableTypeFromRoll(ticketRoll);
@@ -541,6 +478,16 @@ export function createPreGeneratedMapFloorDrops(seed: number) {
     }
   }
   return { cards, consumables };
+}
+
+export function createPreGeneratedMapFloorDrops(seed: number) {
+  const allPositions: MapPosition[] = [];
+  for (let y = 0; y < MAP_ROWS; y += 1) {
+    for (let x = DUNGEON_MIN_X; x <= DUNGEON_MAX_X; x += 1) {
+      allPositions.push({ x, y });
+    }
+  }
+  return createMapFloorDropsForPositions(seed, allPositions);
 }
 
 export function buildKnownRoomRoutes(
