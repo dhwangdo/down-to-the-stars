@@ -2882,7 +2882,7 @@ export default function Home() {
         return {
           ...enemy,
           isBoss: encounter.isBoss,
-          hp: godsLamentApplies ? Math.floor(currentHp * 0.8) : currentHp,
+          hp: godsLamentApplies ? Math.floor(currentHp * 0.7) : currentHp,
           strength: blessings.includes("absorption") ? enemy.strength - 1 : enemy.strength,
         };
       }));
@@ -3735,6 +3735,7 @@ export default function Home() {
 
   const spendMapTurn = () => {
     if (screen !== "map" || playerNameSetupOpen || mapTraveling) return;
+    centerMapOn(mapPosition);
     setMapWaitNoticeNonce((current) => current + 1);
     const roomKey = mapRoomKey(mapPosition);
     const revealedWorld = materializeVisibleMapContent(mapPosition, mapSeed, mapEnemyWorld);
@@ -8250,19 +8251,19 @@ export default function Home() {
                 tabIndex={0}
                 onMouseEnter={(event) => showBlessingTooltip(event, {
                   name: "신들의 비탄",
-                  description: "다음 전투하는 모든 적의 체력을 20% 감소시킵니다. 전투마다 1회 소모됩니다.",
+                  description: "다음 전투하는 모든 적의 체력을 30% 감소시킵니다. 전투마다 1회 소모됩니다.",
                 })}
                 onMouseMove={(event) => showBlessingTooltip(event, {
                   name: "신들의 비탄",
-                  description: "다음 전투하는 모든 적의 체력을 20% 감소시킵니다. 전투마다 1회 소모됩니다.",
+                  description: "다음 전투하는 모든 적의 체력을 30% 감소시킵니다. 전투마다 1회 소모됩니다.",
                 })}
                 onMouseLeave={() => setHoveredBlessingTooltip(null)}
                 onFocus={(event) => showBlessingTooltip(event, {
                   name: "신들의 비탄",
-                  description: "다음 전투하는 모든 적의 체력을 20% 감소시킵니다. 전투마다 1회 소모됩니다.",
+                  description: "다음 전투하는 모든 적의 체력을 30% 감소시킵니다. 전투마다 1회 소모됩니다.",
                 })}
                 onBlur={() => setHoveredBlessingTooltip(null)}
-                aria-label={`신들의 비탄, ${godsLamentCharges}: 다음 전투하는 모든 적의 체력을 20% 감소시킵니다. 전투마다 1회 소모됩니다.`}
+                aria-label={`신들의 비탄, ${godsLamentCharges}: 다음 전투하는 모든 적의 체력을 30% 감소시킵니다. 전투마다 1회 소모됩니다.`}
               >
                 신들의 비탄({godsLamentCharges})
               </span>
