@@ -1410,7 +1410,7 @@ function CardFace({
       case "drawEachPile":
         return <span>모든 파일에서 카드를 1장씩 뽑습니다.</span>;
       case "dash":
-        return <span>무작위 파일에서 카드를 1장씩 2[3]번 뽑습니다.</span>;
+        return <span>무작위 파일에서 카드를 1장씩 {card.forged ? 3 : "2[3]"}번 뽑습니다.</span>;
       case "quickStep":
         return <span>카드를 {card.draw}장 뽑습니다.</span>;
       case "rulerCompass":
