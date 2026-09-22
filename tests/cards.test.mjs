@@ -8,6 +8,7 @@ import {
   RARE_CARD_POOL,
   SPECIAL_CARD_POOL,
   STARTER_CARD_POOL,
+  createAdrenalineCard,
   createRadianceCard,
   isAttackCard,
 } from "../app/game/cards.ts";
@@ -66,12 +67,15 @@ test("current card data keeps key balance values and removed systems absent", ()
     ],
   );
   assert.deepEqual(
-    RARE_CARD_POOL.filter((card) => ["경제학 연구", "광학 연구"].includes(card.name)).map(({ name, cost, rule }) => ({ name, cost, rule })),
+    RARE_CARD_POOL.filter((card) => ["경제학 연구", "법학 연구", "광학 연구"].includes(card.name)).map(({ name, cost, rule }) => ({ name, cost, rule })),
     [
-      { name: "경제학 연구", cost: 2, rule: true },
+      { name: "법학 연구", cost: 1, rule: true },
+      { name: "경제학 연구", cost: 3, rule: true },
       { name: "광학 연구", cost: 1, rule: true },
     ],
   );
+  assert.equal(RARE_CARD_POOL.find((card) => card.name === "연사")?.cost, 1);
+  assert.equal(createAdrenalineCard().value, 2);
   const radiance = createRadianceCard(99);
   assert.deepEqual(
     { name: radiance.name, cost: radiance.cost, value: radiance.value, token: radiance.token },

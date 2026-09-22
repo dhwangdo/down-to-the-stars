@@ -1404,7 +1404,7 @@ function CardFace({
       case "focus":
         return <span><strong className="effect-keyword">에너지</strong>를 1 얻습니다. 카드를 1장 버립니다.</span>;
       case "adrenaline":
-        return <span><strong className="effect-keyword">에너지</strong>를 1 얻습니다. 카드를 {card.draw}장 뽑습니다.</span>;
+        return <span><strong className="effect-keyword">체력</strong>을 2 잃습니다. <strong className="effect-keyword">에너지</strong>를 {card.value} 얻습니다. 카드를 {card.draw}장 뽑습니다.</span>;
       case "sweep":
         return <span>모든 적에게 <span className="effect-type damage">피해</span>를 {damageNumber} 줍니다.</span>;
       case "drawEachPile":
@@ -1476,7 +1476,7 @@ function CardFace({
       case "nebula":
         return <><span><strong className="effect-keyword">광채</strong>를 1장 가져옵니다.</span><span><span className="effect-star">★★</span>를 얻습니다.</span></>;
       case "lightTravelTime":
-        return <span>다음 턴 시작 시 <strong className="effect-keyword">광채</strong>를 2장 가져옵니다.</span>;
+        return <span>다다음 턴 시작 시 <strong className="effect-keyword">광채</strong>를 2장 가져옵니다.</span>;
       case "wolfTalisman":
         return <span><strong className="effect-keyword">사용불가.</strong> 지니고 있는 동안 <strong className="effect-keyword">힘</strong>을 1 얻습니다. (중복 불가)</span>;
       case "turtleTalisman":
@@ -1528,7 +1528,7 @@ function CardFace({
       case "combatManual":
         return <span><strong className="effect-keyword">사용 불가</strong>. 손패에 있는 동안 <strong className="effect-keyword">힘</strong>과 <strong className="effect-keyword">강인함</strong>을 2 얻습니다.</span>;
       case "grimoire":
-        return <span><strong className="effect-keyword">사용 불가</strong>. 손패에 있는 동안 카드를 낼 때마다 <span className="effect-star">★</span>을 얻습니다.</span>;
+        return <span><strong className="effect-keyword">사용 불가</strong>. 손패에 있는 동안 카드를 낼 때마다 <span className="effect-star">★</span>을 얻습니다. <span className="effect-star">★</span>가 7개 이상이면 전부 잃고 <strong className="effect-keyword">체력</strong>을 5 잃습니다.</span>;
       case "horologium":
         return <span>추가 턴을 얻습니다.</span>;
       case "ophiuchus":
@@ -2669,9 +2669,13 @@ export default function Home() {
         origins.set(card.id, source);
         pendingEnemyTokenIdsRef.current.add(card.id);
       });
+      const pendingRadianceAfterTurn = current.pendingRadiance.map((turns) => turns - 1);
+      const radianceArrivingThisTurn = pendingRadianceAfterTurn
+        .filter((turns) => turns <= 0)
+        .length * 2;
       const opticalResearchCount = current.activeRuleCards.filter((card) => card.effect === "opticsResearch").length;
       const lightLightLightCount = blessings.includes("lightLightLight") && current.turn === 3 ? 2 : 0;
-      const nextTurnRadianceCount = opticalResearchCount + current.pendingRadiance + lightLightLightCount;
+      const nextTurnRadianceCount = opticalResearchCount + radianceArrivingThisTurn + lightLightLightCount;
       const opticalRadiances = Array.from(
         { length: nextTurnRadianceCount },
         () => createRadianceCard(nextCardIdRef.current++),
@@ -2696,7 +2700,7 @@ export default function Home() {
         pendingDraws: 0,
         pendingPileDrawCount: 0,
         pendingDashRandomDraws: 0,
-        pendingRadiance: 0,
+        pendingRadiance: pendingRadianceAfterTurn.filter((turns) => turns > 0),
         pendingResearchDraw: null,
         pendingDiscards: 0,
         pendingSweep: false,
@@ -2724,6 +2728,35 @@ export default function Home() {
       };
     });
   };
+
+  useEffect(() => {
+    if (
+      screen !== "battle"
+      || game.status !== "playing"
+      || game.stars < 7
+      || !game.hand.some((card) => card.effect === "grimoire")
+    ) return;
+    const timer = window.setTimeout(() => {
+      setGame((current) => {
+        if (
+          current.status !== "playing"
+          || current.stars < 7
+          || !current.hand.some((card) => card.effect === "grimoire")
+        ) return current;
+        const nextPlayerHp = Math.max(0, current.playerHp - 5);
+        return {
+          ...current,
+          stars: 0,
+          playerHp: nextPlayerHp,
+          status: nextPlayerHp === 0 ? "lost" : current.status,
+          message: nextPlayerHp === 0
+            ? "마도서의 대가로 쓰러졌습니다."
+            : "마도서: ★를 모두 잃고 체력 5 감소",
+        };
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [game.hand, game.stars, game.status, screen]);
 
   const clearBattleTimers = () => {
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -6171,9 +6204,19 @@ export default function Home() {
         oneUpUsedRef.current = true;
         setOneUpUsed(true);
       }
+      const selfDamageLife = resolveLethalDamage(
+        thornLife.hp,
+        card.effect === "adrenaline" ? 2 : 0,
+        maxPlayerHp,
+        blessings.includes("oneUp") && !oneUpUsedRef.current,
+      );
+      if (selfDamageLife.usedOneUp) {
+        oneUpUsedRef.current = true;
+        setOneUpUsed(true);
+      }
       const nextPlayerHp = card.effect === "ophiuchus"
         ? Math.min(maxPlayerHp, current.playerHp + 5)
-        : thornLife.hp;
+        : selfDamageLife.hp;
       const canDraw = current.piles.some((pile) => pile.length > 0);
       const drawEachPileResult = card.effect === "drawEachPile" || (card.effect === "fileDraw" && card.forged)
         ? drawFromPiles(current.piles)
@@ -6257,7 +6300,7 @@ export default function Home() {
         if (card.effect === "lightCluster") return "빛무리: 광채 1장 획득";
         if (card.effect === "largePrism") return "대형 프리즘: 광채 3장 획득";
         if (card.effect === "nebula") return "성운: 광채 1장 획득 · ★★ 획득";
-        if (card.effect === "lightTravelTime") return "광행시간: 다음 턴 시작 시 광채 2장 획득";
+        if (card.effect === "lightTravelTime") return "광행시간: 다다음 턴 시작 시 광채 2장 획득";
         if (card.effect === "radiance") return `${targetEnemy?.name}에게 광채 피해 ${damage}`;
         if (card.effect === "lawResearch") return "법학 연구: 룰 카드 비용 감소";
         if (card.effect === "mirrorImage") return "거울상: 방어와 마법 방어 교환";
@@ -6270,7 +6313,7 @@ export default function Home() {
         if (card.effect === "battlePlan") return `★ ${card.value}개 획득 · 드로우 ${card.draw}`;
         if (card.effect === "prepare") return canDraw ? "드로우할 파일을 선택하세요." : "버릴 카드를 선택하세요.";
         if (card.effect === "focus") return "에너지를 1 얻습니다 · 버릴 카드를 선택하세요.";
-        if (card.effect === "adrenaline") return `에너지를 1 얻습니다 · 카드 ${card.draw}장 드로우`;
+        if (card.effect === "adrenaline") return `체력 2 감소 · 에너지 ${card.value} 획득 · 카드 ${card.draw}장 드로우`;
         if (card.effect === "sweep") return canDraw ? "가져올 파일을 선택하세요." : "가져올 카드가 없습니다.";
         if (card.effect === "drawEachPile") return `모든 파일에서 ${drawEachPileResult?.hand.length ?? 0}장 뽑음`;
         if (card.effect === "dash") return `질주: 무작위 파일에서 ${dashRandomResult?.hand.length ?? 0}장 뽑음`;
@@ -6333,7 +6376,9 @@ export default function Home() {
         pendingDraws: drawsAdded,
         pendingPileDrawCount,
         pendingDashRandomDraws,
-        pendingRadiance: current.pendingRadiance + (card.effect === "lightTravelTime" ? 2 : 0),
+        pendingRadiance: card.effect === "lightTravelTime"
+          ? [...current.pendingRadiance, 2]
+          : current.pendingRadiance,
         pendingDiscards,
         pendingSweep,
         pendingPileOperation,
@@ -6366,7 +6411,9 @@ export default function Home() {
             : current.doubleNextAttack,
         status: nextPlayerHp === 0 ? "lost" : won && !waitForLethalHitPopups ? "won" : current.status,
         message: nextPlayerHp === 0
-          ? "가시에 찔려 쓰러졌습니다."
+          ? card.effect === "adrenaline"
+            ? "아드레날린의 대가로 쓰러졌습니다."
+            : "가시에 찔려 쓰러졌습니다."
           : won && !waitForLethalHitPopups
             ? "승리! 모든 적을 쓰러뜨렸습니다."
             : `${action}${thornsDamageTaken > 0 ? ` · 가시 피해 ${thornsDamageTaken}` : ""}${card.effect === "prepare" || card.effect === "focus" ? "" : drawMessage}`,
@@ -10751,6 +10798,11 @@ className={`deck-editor-card deck-list-entry rarity-${card.rarity} ${card.rarity
                   {game.damageTakenMultiplier > 1 && <span className="is-debuff">받는 피해 ×{game.damageTakenMultiplier}</span>}
                   {game.invulnerable && <span className="is-buff">피해 면역</span>}
                   {game.doubleNextAttack && <span className="is-buff">다음 공격 2회</span>}
+                  {game.pendingRadiance.map((turns, index) => (
+                    <span className="is-buff" key={`light-travel-time-${index}`}>
+                      광행시간({turns})
+                    </span>
+                  ))}
                   {game.playerPhysicalResistance > 0 && <span className="is-buff">물리 저항 {game.playerPhysicalResistance}</span>}
                   {game.playerPhysicalVulnerability > 0 && <span className="is-debuff">물리 취약 {game.playerPhysicalVulnerability}</span>}
                   {game.playerMagicResistance > 0 && <span className="is-buff">마법 저항 {game.playerMagicResistance}</span>}

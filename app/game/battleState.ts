@@ -24,8 +24,8 @@ export type GameState = {
   pendingPileDrawCount: number;
   /** 질주가 사용한 무작위 파일 드로우 수. */
   pendingDashRandomDraws: number;
-  /** 광행시간: 다음 플레이어 턴 시작 시 생성할 광채 수. */
-  pendingRadiance: number;
+  /** 광행시간: 광채 생성까지 남은 플레이어 턴 수를 카드별로 저장한다. */
+  pendingRadiance: number[];
   /** 연구 룰 카드의 추가 드로우 선택 상태. */
   pendingResearchDraw: "astronomy" | "necromancy" | null;
   astronomyResearchUses: number;
@@ -187,7 +187,7 @@ export function waitingState(
     pendingDraws: 0,
     pendingPileDrawCount: 0,
     pendingDashRandomDraws: 0,
-    pendingRadiance: 0,
+    pendingRadiance: [],
     pendingResearchDraw: null,
     astronomyResearchUses: 0,
     necromancyResearchUses: 0,
